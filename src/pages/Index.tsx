@@ -1,46 +1,49 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useApp } from '@/store/app-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { PerfilUsuario } from '@/lib/types'
 import { Shield } from 'lucide-react'
+import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 export default function Index() {
-  const { login, user } = useApp()
+  const { user, isAuthenticated, login, signUp } = useApp()
   const navigate = useNavigate()
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [role, setRole] = useState<PerfilUsuario>('ALUNA_FF')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
 
-  // Auto redirect if already logged in
-  if (user) {
-    if (user.perfil === 'ADMIN') navigate('/admin/inscricoes')
-    else if (user.perfil === 'ALUNA_FF') navigate('/aluna/dashboard')
-    else if (user.perfil === 'PROFESSOR') navigate('/professor/chamada')
-    return null
-  }
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (
+        user.perfil === 'ADMIN' ||
+        user.perfil === 'GESTAO' ||
+        user.perfil === 'ASSISTENTE_SOCIAL'
+      ) {
+        navigate('/admin/inscricoes')
+      } else if (user.perfil === 'ALUNA_FF') {
+        navigate('/aluna/dashboard')
+      } else if (user.perfil === 'PROFESSOR') {
+        navigate('/professor/chamada')
+      }
+    }
+  }, [isAuthenticated, user, navigate])
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (email) {
-      login(email, role)
-      if (role === 'ADMIN') navigate('/admin/inscricoes')
-      else if (role === 'ALUNA_FF') navigate('/aluna/dashboard')
-      else if (role === 'PROFESSOR') navigate('/professor/chamada')
+    setError('')
+    const result =
+      mode === 'login' ? await login(email, password) : await signUp(name, email, password)
+    if (result.error) {
+      setError(getErrorMessage(result.error))
     }
   }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background">
-      {/* Hero Section */}
       <div className="flex-1 relative flex flex-col justify-center p-8 md:p-16 bg-primary text-primary-foreground overflow-hidden">
         <div className="absolute inset-0 opacity-20">
           <img
@@ -61,29 +64,42 @@ export default function Index() {
             Curso gratuito de defesa pessoal e empoderamento exclusivo para mulheres. Junte-se a nós
             na edição IV e descubra sua força.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              asChild
-              size="lg"
-              className="bg-secondary hover:bg-secondary/90 text-white text-lg h-14 px-8 shadow-lg"
-            >
-              <Link to="/inscricao">Quero me Inscrever</Link>
-            </Button>
-          </div>
+          <Button
+            asChild
+            size="lg"
+            className="bg-secondary hover:bg-secondary/90 text-white text-lg h-14 px-8 shadow-lg"
+          >
+            <Link to="/inscricao">Quero me Inscrever</Link>
+          </Button>
         </div>
       </div>
 
-      {/* Login Section */}
       <div className="w-full md:w-[450px] flex items-center justify-center p-8 bg-card shadow-[-20px_0_30px_-15px_rgba(0,0,0,0.1)] z-10 relative">
         <Card className="w-full border-none shadow-none">
           <CardHeader className="px-0">
-            <CardTitle className="text-2xl font-bold">Acessar Sistema</CardTitle>
+            <CardTitle className="text-2xl font-bold">
+              {mode === 'login' ? 'Acessar Sistema' : 'Criar Conta'}
+            </CardTitle>
             <CardDescription>
-              Faça login para acompanhar sua inscrição ou gerenciar o projeto.
+              {mode === 'login'
+                ? 'Faça login para acompanhar sua inscrição ou gerenciar o projeto.'
+                : 'Crie sua conta para se inscrever no projeto.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0">
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'signup' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Nome Completo</label>
+                  <Input
+                    placeholder="Maria da Silva"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="h-12"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium">E-mail</label>
                 <Input
@@ -96,34 +112,59 @@ export default function Index() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Perfil (Simulação)</label>
-                <Select value={role} onValueChange={(v) => setRole(v as PerfilUsuario)}>
-                  <SelectTrigger className="h-12">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALUNA_FF">Aluna (Força Feminina)</SelectItem>
-                    <SelectItem value="PROFESSOR">Professor(a)</SelectItem>
-                    <SelectItem value="ADMIN">Administrador</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-medium">Senha</label>
-                <Input type="password" placeholder="••••••••" required className="h-12" />
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-12"
+                />
               </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full h-12 text-md mt-4">
-                Entrar
+                {mode === 'login' ? 'Entrar' : 'Criar Conta'}
               </Button>
             </form>
             <div className="mt-6 text-center text-sm text-muted-foreground">
-              <p>Dicas para teste mock:</p>
-              <p className="mt-1 font-mono text-xs text-left bg-muted p-2 rounded">
-                admin@atkdgv.com (Admin)
+              {mode === 'login' ? (
+                <p>
+                  Não tem conta?{' '}
+                  <button
+                    onClick={() => {
+                      setMode('signup')
+                      setError('')
+                    }}
+                    className="text-primary font-medium hover:underline"
+                  >
+                    Criar conta
+                  </button>
+                </p>
+              ) : (
+                <p>
+                  Já tem conta?{' '}
+                  <button
+                    onClick={() => {
+                      setMode('login')
+                      setError('')
+                    }}
+                    className="text-primary font-medium hover:underline"
+                  >
+                    Fazer login
+                  </button>
+                </p>
+              )}
+            </div>
+            <div className="mt-4 text-center text-xs text-muted-foreground">
+              <p className="font-mono bg-muted p-2 rounded text-left">
+                Contas de teste (senha: Skip@Pass):
+                <br />
+                andiaracaneo10@gmail.com (Admin)
                 <br />
                 prof@atkdgv.com (Professor)
                 <br />
-                aluna1@teste.com (Aluna Aprovada)
+                aluna1@teste.com (Aluna)
               </p>
             </div>
           </CardContent>

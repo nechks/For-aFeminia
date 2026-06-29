@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -32,56 +32,88 @@ import {
 } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Shield, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react'
-import { TurmaFF } from '@/lib/types'
 import { toast } from '@/components/ui/use-toast'
+import { extractFieldErrors, type FieldErrors } from '@/lib/pocketbase/errors'
+import { TurmaFF } from '@/lib/types'
 
 const formSchema = z.object({
-  nomeCompleto: z.string().min(3, 'Nome completo é obrigatório'),
-  dataNascimento: z.string().refine((val) => {
-    const age = new Date().getFullYear() - new Date(val).getFullYear()
-    return age >= 18
+  nome_completo: z.string().min(3, 'Nome completo é obrigatório'),
+  data_nascimento: z.string().refine((val) => {
+    return new Date().getFullYear() - new Date(val).getFullYear() >= 18
   }, 'Você deve ter pelo menos 18 anos'),
   cpf: z.string().min(11, 'CPF inválido'),
+  rg: z.string().optional(),
   telefone: z.string().min(10, 'Telefone inválido'),
   cep: z.string().min(8, 'CEP inválido'),
   rua: z.string().min(1, 'Obrigatório'),
   numero: z.string().min(1, 'Obrigatório'),
   bairro: z.string().min(1, 'Obrigatório'),
   cidade: z.string().min(1, 'Obrigatório'),
+  estado: z.string().min(2, 'Obrigatório'),
   turma: z.string().min(1, 'Selecione uma turma'),
-  autorizaLgpd: z.boolean().refine((val) => val === true, 'É necessário autorizar o uso dos dados'),
+  aceite_lgpd: z.boolean().refine((v) => v, 'É necessário autorizar'),
 })
 
 export default function Inscricao() {
-  const { addInscricao } = useApp()
-  const navigate = useNavigate()
+  const { user, addInscricao } = useApp()
   const [step, setStep] = useState(1)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const totalSteps = 4
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      autorizaLgpd: false,
-    },
+    defaultValues: { aceite_lgpd: false, rg: '' },
   })
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    addInscricao({
-      ...values,
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center border-none shadow-xl">
+          <CardHeader>
+            <CardTitle className="text-2xl">Login Necessário</CardTitle>
+            <CardDescription>Você precisa estar autenticada para se inscrever.</CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button asChild className="w-full h-12">
+              <Link to="/">Ir para o Login</Link>
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    )
+  }
+
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    const { rua, numero, ...rest } = values
+    const { error } = await addInscricao({
+      ...rest,
+      endereco: `${rua}, ${numero}`,
       turma: values.turma as TurmaFF,
-    })
-    setIsSubmitted(true)
-    toast({ title: 'Inscrição recebida!' })
+    } as any)
+    if (error) {
+      setFieldErrors(extractFieldErrors(error))
+      Object.entries(fieldErrors).forEach(([field, msg]) => {
+        form.setError(field as any, { message: msg })
+      })
+      toast({
+        title: 'Erro ao enviar',
+        description: 'Verifique os campos.',
+        variant: 'destructive',
+      })
+    } else {
+      setIsSubmitted(true)
+      toast({ title: 'Inscrição recebida!' })
+    }
   }
 
   const nextStep = async () => {
-    let fieldsToValidate: any[] = []
-    if (step === 1) fieldsToValidate = ['nomeCompleto', 'dataNascimento', 'cpf', 'telefone']
-    if (step === 2) fieldsToValidate = ['cep', 'rua', 'numero', 'bairro', 'cidade']
-    if (step === 3) fieldsToValidate = ['turma']
-
-    const isValid = await form.trigger(fieldsToValidate as any)
+    const fields: Record<number, string[]> = {
+      1: ['nome_completo', 'data_nascimento', 'cpf', 'telefone'],
+      2: ['cep', 'rua', 'numero', 'bairro', 'cidade', 'estado'],
+      3: ['turma'],
+    }
+    const isValid = await form.trigger(fields[step] as any)
     if (isValid) setStep((s) => Math.min(s + 1, totalSteps))
   }
 
@@ -137,7 +169,7 @@ export default function Inscricao() {
                   <h2 className="text-xl font-semibold mb-4">Dados Pessoais</h2>
                   <FormField
                     control={form.control}
-                    name="nomeCompleto"
+                    name="nome_completo"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Nome Completo</FormLabel>
@@ -151,7 +183,7 @@ export default function Inscricao() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <FormField
                       control={form.control}
-                      name="dataNascimento"
+                      name="data_nascimento"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Data de Nascimento</FormLabel>
@@ -176,19 +208,34 @@ export default function Inscricao() {
                       )}
                     />
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="telefone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Telefone (WhatsApp)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="(27) 99999-9999" {...field} className="h-11" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <FormField
+                      control={form.control}
+                      name="rg"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>RG (opcional)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="00.000.000-0" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="telefone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Telefone (WhatsApp)</FormLabel>
+                          <FormControl>
+                            <Input placeholder="(27) 99999-9999" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -241,7 +288,7 @@ export default function Inscricao() {
                       control={form.control}
                       name="bairro"
                       render={({ field }) => (
-                        <FormItem className="col-span-1 md:col-span-3">
+                        <FormItem className="col-span-1">
                           <FormLabel>Bairro</FormLabel>
                           <FormControl>
                             <Input placeholder="Centro" {...field} className="h-11" />
@@ -250,20 +297,33 @@ export default function Inscricao() {
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={form.control}
+                      name="cidade"
+                      render={({ field }) => (
+                        <FormItem className="col-span-1">
+                          <FormLabel>Cidade</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Vitória" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="estado"
+                      render={({ field }) => (
+                        <FormItem className="col-span-1">
+                          <FormLabel>Estado</FormLabel>
+                          <FormControl>
+                            <Input placeholder="ES" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
-                  <FormField
-                    control={form.control}
-                    name="cidade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cidade</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Vitória" {...field} className="h-11" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
               )}
 
@@ -321,12 +381,11 @@ export default function Inscricao() {
                       Ao enviar este formulário, você concorda que a Associação de Taekwondo da
                       Grande Vitória (ATKDGV) colete e processe seus dados pessoais exclusivamente
                       para fins de inscrição, seleção e acompanhamento no Projeto Força Feminina IV.
-                      Seus dados de saúde e vulnerabilidade serão tratados com absoluto sigilo.
                     </p>
                   </div>
                   <FormField
                     control={form.control}
-                    name="autorizaLgpd"
+                    name="aceite_lgpd"
                     render={({ field }) => (
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
@@ -338,6 +397,7 @@ export default function Inscricao() {
                             Li e concordo com os termos descritos acima.
                           </CardDescription>
                         </div>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

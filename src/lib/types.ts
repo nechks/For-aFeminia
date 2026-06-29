@@ -1,5 +1,5 @@
 export type PerfilUsuario = 'ALUNA_FF' | 'PROFESSOR' | 'ASSISTENTE_SOCIAL' | 'ADMIN' | 'GESTAO'
-export type StatusInscricao = 'AGUARDANDO' | 'APROVADA' | 'LISTA_ESPERA' | 'CANCELADA'
+export type StatusInscricao = 'AGUARDANDO' | 'APROVADA' | 'REPROVADA' | 'EM_ANALISE'
 export type TurmaFF =
   | 'CENTRO_VITORIA'
   | 'AEST_SERRA'
@@ -9,36 +9,31 @@ export type TurmaFF =
 
 export interface Usuario {
   id: string
-  nomeCompleto: string
+  name: string
   email: string
   perfil: PerfilUsuario
   ativo: boolean
+  avatar?: string
+  created: string
+  updated: string
 }
 
 export interface FichaInscricaoFF {
   id: string
-  usuarioId?: string
-  turma: TurmaFF
-  nomeCompleto: string
-  dataNascimento: string
+  user_id: string
+  nome_completo: string
   cpf: string
-  telefone: string
-  cep: string
-  rua: string
-  numero: string
-  bairro: string
-  cidade: string
-  autorizaLgpd: boolean
+  rg?: string
+  data_nascimento?: string
+  telefone?: string
+  endereco?: string
+  bairro?: string
+  cidade?: string
+  estado?: string
+  cep?: string
+  turma?: string
   status: StatusInscricao
-  dataPrimeiraAula?: string
-  dataCriacao: string
-  fichaConfirmacaoPreenchida?: boolean
-}
-
-export interface Presenca {
-  id: string
-  alunaId: string
-  turma: TurmaFF
-  dataAula: string
-  presente: boolean
+  aceite_lgpd: boolean
+  created: string
+  updated: string
 }
