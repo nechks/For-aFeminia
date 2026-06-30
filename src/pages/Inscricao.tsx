@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useApp } from '@/store/app-context'
+import { submitInscricao } from '@/services/inscricao'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -33,9 +33,6 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Shield, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
-import { extractFieldErrors, type FieldErrors } from '@/lib/pocketbase/errors'
-import { TurmaFF } from '@/lib/types'
-
 const formSchema = z.object({
   nome_completo: z.string().min(3, 'Nome completo é obrigatório'),
   data_nascimento: z.string().refine((val) => {
@@ -55,10 +52,8 @@ const formSchema = z.object({
 })
 
 export default function Inscricao() {
-  const { user, addInscricao } = useApp()
   const [step, setStep] = useState(1)
   const [isSubmitted, setIsSubmitted] = useState(false)
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const totalSteps = 4
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -66,44 +61,27 @@ export default function Inscricao() {
     defaultValues: { aceite_lgpd: false, rg: '' },
   })
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md text-center border-none shadow-xl">
-          <CardHeader>
-            <CardTitle className="text-2xl">Login Necessário</CardTitle>
-            <CardDescription>Você precisa estar autenticada para se inscrever.</CardDescription>
-          </CardHeader>
-          <CardFooter>
-            <Button asChild className="w-full h-12">
-              <Link to="/">Ir para o Login</Link>
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    )
-  }
-
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     const { rua, numero, ...rest } = values
-    const { error } = await addInscricao({
-      ...rest,
-      endereco: `${rua}, ${numero}`,
-      turma: values.turma as TurmaFF,
-    } as any)
-    if (error) {
-      setFieldErrors(extractFieldErrors(error))
-      Object.entries(fieldErrors).forEach(([field, msg]) => {
-        form.setError(field as any, { message: msg })
+    try {
+      await submitInscricao({
+        ...rest,
+        endereco: `${rua}, ${numero}`,
       })
-      toast({
-        title: 'Erro ao enviar',
-        description: 'Verifique os campos.',
-        variant: 'destructive',
-      })
-    } else {
       setIsSubmitted(true)
       toast({ title: 'Inscrição recebida!' })
+    } catch (err: any) {
+      const response = err.response || {}
+      if (response.fields) {
+        Object.entries(response.fields).forEach(([field, msg]) => {
+          form.setError(field as any, { message: msg as string })
+        })
+      }
+      toast({
+        title: 'Erro ao enviar',
+        description: response.message || 'Verifique os campos.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -392,7 +370,7 @@ export default function Inscricao() {
                           <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel>Autorizo o uso dos meus dados</FormLabel>
+                          <FormLabel>Aceito os termos da LGPD</FormLabel>
                           <CardDescription>
                             Li e concordo com os termos descritos acima.
                           </CardDescription>
