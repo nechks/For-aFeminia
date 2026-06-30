@@ -9,8 +9,10 @@ import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 import Inscricao from './pages/Inscricao'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import MuralManagement from './pages/admin/MuralManagement'
 import DashboardAluna from './pages/aluna/DashboardAluna'
 import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
+import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
 
 // Protected Route Wrapper
@@ -49,6 +51,22 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO']}>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/mural"
+        element={
+          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO']}>
+            <MuralManagement />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Aluna Routes */}
       <Route
@@ -64,6 +82,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute allowedRoles={['ALUNA_FF']}>
             <FichaConfirmacao />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/aluna/calendario"
+        element={
+          <ProtectedRoute allowedRoles={['ALUNA_FF']}>
+            <Calendario />
           </ProtectedRoute>
         }
       />

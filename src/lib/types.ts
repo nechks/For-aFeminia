@@ -74,3 +74,40 @@ export interface DocumentosAnexos {
   created: string
   updated: string
 }
+
+export interface Presenca {
+  id: string
+  user_id: string
+  data_aula: string
+  presente: boolean
+  justificativa?: string
+  created: string
+  updated: string
+}
+
+export interface Mural {
+  id: string
+  titulo: string
+  conteudo: string
+  data_publicacao: string
+  turma?: string
+  created: string
+  updated: string
+}
+
+export interface CalendarioAula {
+  id: string
+  turma: string
+  data_aula: string
+  created: string
+  updated: string
+}
+
+export interface DashboardData {
+  nome: string
+  turma: string
+  totalAulas: number
+  aulasAssistidas: number
+  percentualFrequencia: number
+  avisos: Mural[]
+}

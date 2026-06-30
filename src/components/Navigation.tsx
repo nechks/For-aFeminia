@@ -42,6 +42,18 @@ const navItems: NavItem[] = [
   { title: 'Ficha de Confirmação', href: '/aluna/ficha', icon: FileText, roles: ['ALUNA_FF'] },
   { title: 'Calendário', href: '/aluna/calendario', icon: Calendar, roles: ['ALUNA_FF'] },
   { title: 'Chamada', href: '/professor/chamada', icon: UserCheck, roles: ['PROFESSOR'] },
+  {
+    title: 'Mural',
+    href: '/admin/mural',
+    icon: Bell,
+    roles: ['ADMIN', 'GESTAO'],
+  },
+  {
+    title: 'Dashboard',
+    href: '/admin/dashboard',
+    icon: LayoutDashboard,
+    roles: ['ADMIN', 'GESTAO'],
+  },
 ]
 
 export function Sidebar() {

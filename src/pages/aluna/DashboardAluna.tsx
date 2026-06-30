@@ -1,4 +1,8 @@
+import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '@/store/app-context'
+import { useRealtime } from '@/hooks/use-realtime'
+import { getDashboardForcaFeminina } from '@/services/dashboard'
+import { DashboardData } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -9,24 +13,62 @@ import {
   FileText,
   CheckCircle2,
   ArrowRight,
+  Loader2,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { turmaLabels } from '@/lib/constants'
 
 export default function DashboardAluna() {
-  const { user, inscricoes, minhaConfirmacao } = useApp()
-  const minhaInscricao = inscricoes.find((i) => i.user_id === user?.id)
+  const { user, minhaConfirmacao, isAuthenticated } = useApp()
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  if (!minhaInscricao) {
-    return <div className="p-8 text-center text-muted-foreground">Inscrição não encontrada.</div>
+  const loadDashboard = useCallback(async () => {
+    try {
+      const data = await getDashboardForcaFeminina()
+      setDashboard(data)
+    } catch (err) {
+      console.error('Failed to load dashboard:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadDashboard()
+  }, [loadDashboard])
+
+  useRealtime(
+    'presenca',
+    () => {
+      loadDashboard()
+    },
+    isAuthenticated,
+  )
+
+  useRealtime(
+    'mural',
+    () => {
+      loadDashboard()
+    },
+    isAuthenticated,
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
-  const precisaPreencherFicha = minhaInscricao.status === 'APROVADA' && !minhaConfirmacao
+  const precisaPreencherFicha = !minhaConfirmacao
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
-          Olá, {user?.name?.split(' ')[0] ?? 'Aluna'}!
+          Olá, {dashboard?.nome?.split(' ')[0] ?? user?.name?.split(' ')[0] ?? 'Aluna'}!
         </h1>
         <p className="text-muted-foreground mt-1">
           Bem-vinda ao seu painel do Projeto Força Feminina.
@@ -70,8 +112,8 @@ export default function DashboardAluna() {
                     <circle
                       className="text-secondary stroke-current"
                       strokeWidth="8"
-                      strokeDasharray="300"
-                      strokeDashoffset="120"
+                      strokeDasharray="352"
+                      strokeDashoffset={352 - (352 * (dashboard?.percentualFrequencia ?? 0)) / 100}
                       strokeLinecap="round"
                       fill="transparent"
                       r="56"
@@ -80,19 +122,25 @@ export default function DashboardAluna() {
                     />
                   </svg>
                   <div className="text-center">
-                    <span className="text-2xl font-bold text-primary">60%</span>
+                    <span className="text-2xl font-bold text-primary">
+                      {(dashboard?.percentualFrequencia ?? 0).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
                 <div className="flex-1 space-y-4">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      Aulas Assistidas: <strong>3</strong>
+                      Aulas Assistidas: <strong>{dashboard?.aulasAssistidas ?? 0}</strong>
                     </span>
                     <span className="text-muted-foreground">
-                      Total: <strong>5</strong>
+                      Total: <strong>{dashboard?.totalAulas ?? 0}</strong>
                     </span>
                   </div>
-                  <Progress value={60} className="h-2 bg-muted" indicatorClassName="bg-secondary" />
+                  <Progress
+                    value={dashboard?.percentualFrequencia ?? 0}
+                    className="h-2 bg-muted"
+                    indicatorClassName="bg-secondary"
+                  />
                   <p className="text-sm text-muted-foreground">
                     Continue assim! A presença regular é essencial para o certificado.
                   </p>
@@ -110,19 +158,37 @@ export default function DashboardAluna() {
               <Bell className="w-5 h-5 text-muted-foreground" />
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-medium text-primary px-2 py-1 bg-primary/10 rounded-full">
-                    Novo
-                  </span>
-                  <span className="text-xs text-muted-foreground">Ontem</span>
-                </div>
-                <h4 className="font-semibold text-sm">Aula inaugural especial</h4>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Lembrando que nossa aula inaugural contará com a presença da equipe
-                  multidisciplinar. Não atrasem!
+              {(dashboard?.avisos ?? []).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Nenhum aviso no momento.
                 </p>
-              </div>
+              ) : (
+                (dashboard?.avisos ?? []).map((aviso) => (
+                  <div
+                    key={aviso.id}
+                    className="p-4 rounded-lg bg-primary/5 border border-primary/10"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      {aviso.turma ? (
+                        <span className="text-xs font-medium text-primary px-2 py-1 bg-primary/10 rounded-full">
+                          {turmaLabels[aviso.turma] ?? aviso.turma}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-medium text-secondary px-2 py-1 bg-secondary/10 rounded-full">
+                          Geral
+                        </span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {aviso.data_publicacao
+                          ? new Date(aviso.data_publicacao).toLocaleDateString('pt-BR')
+                          : ''}
+                      </span>
+                    </div>
+                    <h4 className="font-semibold text-sm">{aviso.titulo}</h4>
+                    <p className="text-sm text-muted-foreground mt-1">{aviso.conteudo}</p>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
@@ -155,11 +221,15 @@ export default function DashboardAluna() {
                 <div className="flex items-center text-sm">
                   <CheckCircle2 className="w-4 h-4 text-secondary mr-2" />
                   <span className="font-medium">
-                    {(minhaInscricao.turma ?? '').replace(/_/g, ' ')}
+                    {turmaLabels[dashboard?.turma ?? ''] ??
+                      ((dashboard?.turma ?? '').replace(/_/g, ' ') || '—')}
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Status: <strong className="text-emerald-600">{minhaInscricao.status}</strong>
+                  Frequência:{' '}
+                  <strong className="text-emerald-600">
+                    {(dashboard?.percentualFrequencia ?? 0).toFixed(1)}%
+                  </strong>
                 </div>
               </div>
             </CardContent>

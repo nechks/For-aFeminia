@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-30T01:42:29.668Z",
+  "generatedAt": "2026-06-30T01:55:32.037Z",
   "collections": [
     {
       "name": "users",
@@ -343,6 +343,155 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_doc_conf ON documentos_anexos (confirmacao_id)"]
+    },
+    {
+      "name": "presenca",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id = user_id || @request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "view": "@request.auth.id = user_id || @request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "create": "@request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "update": "@request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "delete": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\""
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_aula",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "presente",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "justificativa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_presenca_user ON presenca (user_id)",
+        "CREATE INDEX idx_presenca_data ON presenca (data_aula)",
+        "CREATE INDEX idx_presenca_turma_data ON presenca (user_id, data_aula)"
+      ]
+    },
+    {
+      "name": "mural",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\"",
+        "view": "@request.auth.id != \"\"",
+        "create": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "update": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "delete": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\""
+      },
+      "fields": [
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "conteudo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_publicacao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "turma",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_mural_turma ON mural (turma)"]
+    },
+    {
+      "name": "calendario_aula",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\"",
+        "view": "@request.auth.id != \"\"",
+        "create": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "update": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "delete": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\""
+      },
+      "fields": [
+        {
+          "name": "turma",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_aula",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_calendario_turma ON calendario_aula (turma)"]
     }
   ]
 }
