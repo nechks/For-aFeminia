@@ -32,7 +32,12 @@ const navItems: NavItem[] = [
     icon: LayoutDashboard,
     roles: ['ADMIN', 'GESTAO'],
   },
-  { title: 'Inscrições', href: '/admin/inscricoes', icon: Users, roles: ['ADMIN', 'GESTAO'] },
+  {
+    title: 'Inscrições',
+    href: '/admin/inscricoes',
+    icon: Users,
+    roles: ['ADMIN', 'GESTAO', 'ASSISTENTE_SOCIAL'],
+  },
   { title: 'Meu Painel', href: '/aluna/dashboard', icon: LayoutDashboard, roles: ['ALUNA_FF'] },
   { title: 'Ficha de Confirmação', href: '/aluna/ficha', icon: FileText, roles: ['ALUNA_FF'] },
   { title: 'Calendário', href: '/aluna/calendario', icon: Calendar, roles: ['ALUNA_FF'] },
@@ -40,10 +45,10 @@ const navItems: NavItem[] = [
 ]
 
 export function Sidebar() {
-  const { user, logout } = useApp()
+  const { user, logout, authLoading } = useApp()
   const location = useLocation()
 
-  if (!user) return null
+  if (authLoading || !user) return null
 
   const filteredItems = navItems.filter((item) => item.roles.includes(user.perfil))
 
@@ -100,11 +105,11 @@ export function Sidebar() {
 }
 
 export function TopHeader() {
-  const { user } = useApp()
+  const { user, authLoading } = useApp()
   const [open, setOpen] = useState(false)
   const location = useLocation()
 
-  if (!user) return null
+  if (authLoading || !user) return null
   const filteredItems = navItems.filter((item) => item.roles.includes(user.perfil))
 
   return (

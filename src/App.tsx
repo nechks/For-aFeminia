@@ -21,7 +21,14 @@ const ProtectedRoute = ({
   children: React.ReactNode
   allowedRoles: string[]
 }) => {
-  const { user } = useApp()
+  const { user, authLoading } = useApp()
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    )
+  }
   if (!user) return <Navigate to="/" replace />
   if (!allowedRoles.includes(user.perfil)) return <Navigate to="/" replace />
   return <>{children}</>
@@ -37,7 +44,7 @@ const AppRoutes = () => (
       <Route
         path="/admin/inscricoes"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO']}>
+          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO', 'ASSISTENTE_SOCIAL']}>
             <AdminDashboard />
           </ProtectedRoute>
         }

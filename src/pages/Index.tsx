@@ -8,7 +8,7 @@ import { Shield } from 'lucide-react'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 export default function Index() {
-  const { user, isAuthenticated, login, signUp } = useApp()
+  const { user, isAuthenticated, authLoading, login, signUp } = useApp()
   const navigate = useNavigate()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [name, setName] = useState('')
@@ -31,6 +31,14 @@ export default function Index() {
       }
     }
   }, [isAuthenticated, user, navigate])
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

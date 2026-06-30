@@ -14,20 +14,19 @@ import { Link } from 'react-router-dom'
 
 export default function DashboardAluna() {
   const { user, inscricoes } = useApp()
-  const minhaInscricao = inscricoes.find((i) => i.usuarioId === user?.id)
+  const minhaInscricao = inscricoes.find((i) => i.user_id === user?.id)
 
   if (!minhaInscricao) {
     return <div className="p-8 text-center text-muted-foreground">Inscrição não encontrada.</div>
   }
 
-  const precisaPreencherFicha =
-    minhaInscricao.status === 'APROVADA' && !minhaInscricao.fichaConfirmacaoPreenchida
+  const precisaPreencherFicha = minhaInscricao.status === 'APROVADA'
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
-          Olá, {user?.nomeCompleto.split(' ')[0]}!
+          Olá, {user?.name?.split(' ')[0] ?? 'Aluna'}!
         </h1>
         <p className="text-muted-foreground mt-1">
           Bem-vinda ao seu painel do Projeto Força Feminina.
@@ -155,7 +154,9 @@ export default function DashboardAluna() {
               <div className="space-y-3">
                 <div className="flex items-center text-sm">
                   <CheckCircle2 className="w-4 h-4 text-secondary mr-2" />
-                  <span className="font-medium">{minhaInscricao.turma.replace(/_/g, ' ')}</span>
+                  <span className="font-medium">
+                    {(minhaInscricao.turma ?? '').replace(/_/g, ' ')}
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Status: <strong className="text-emerald-600">{minhaInscricao.status}</strong>

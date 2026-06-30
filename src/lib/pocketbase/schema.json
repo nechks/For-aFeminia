@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-30T00:19:58.506Z",
+  "generatedAt": "2026-06-30T00:33:57.281Z",
   "collections": [
     {
       "name": "users",
@@ -8,7 +8,7 @@
         "list": "@request.auth.id = id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
         "view": "@request.auth.id = id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
         "create": "",
-        "update": "id = @request.auth.id",
+        "update": "id = @request.auth.id || @request.auth.perfil = \"ADMIN\"",
         "delete": "id = @request.auth.id"
       },
       "fields": [
@@ -63,7 +63,7 @@
       "apiRules": {
         "list": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
         "view": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
-        "create": "@request.auth.id != \"\"",
+        "create": "",
         "update": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\"",
         "delete": "@request.auth.perfil = \"ADMIN\""
       },

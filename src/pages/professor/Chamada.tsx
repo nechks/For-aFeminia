@@ -73,6 +73,8 @@ export default function Chamada() {
                   <SelectItem value="CENTRO_VITORIA">Centro - Vitória</SelectItem>
                   <SelectItem value="AEST_SERRA">Clube AEST - Serra</SelectItem>
                   <SelectItem value="ITAQUARI_CARIACICA">Itaquari - Cariacica</SelectItem>
+                  <SelectItem value="CONJUNTO_CARAPINA_SERRA">Conj. Carapina I - Serra</SelectItem>
+                  <SelectItem value="ATLANTICA_VILLE_VITORIA">Atlântica Ville - Vitória</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -91,7 +93,7 @@ export default function Chamada() {
               <TableBody>
                 {alunasDaTurma.map((aluna) => (
                   <TableRow key={aluna.id}>
-                    <TableCell className="font-medium">{aluna.nomeCompleto}</TableCell>
+                    <TableCell className="font-medium">{aluna.nome_completo}</TableCell>
                     <TableCell className="text-muted-foreground">80%</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">

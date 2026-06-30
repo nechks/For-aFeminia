@@ -21,7 +21,12 @@ interface AppState {
   signUp: (name: string, email: string, password: string) => Promise<{ error: any }>
   logout: () => void
   addInscricao: (data: Partial<FichaInscricaoFF>) => Promise<{ error: any }>
-  updateInscricaoStatus: (id: string, status: StatusInscricao) => Promise<{ error: any }>
+  updateInscricaoStatus: (
+    id: string,
+    status: StatusInscricao,
+    extraData?: Record<string, unknown>,
+  ) => Promise<{ error: any }>
+  submitFichaConfirmacao: (userId: string, data: Record<string, unknown>) => Promise<{ error: any }>
   refreshInscricoes: () => Promise<void>
 }
 
@@ -71,7 +76,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const updateInscricaoStatus = async (id: string, status: StatusInscricao) => {
+  const updateInscricaoStatus = async (
+    id: string,
+    status: StatusInscricao,
+    _extraData?: Record<string, unknown>,
+  ) => {
     try {
       await updateStatus(id, status)
       await loadInscricoes()
@@ -79,6 +88,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return { error }
     }
+  }
+
+  const submitFichaConfirmacao = async (_userId: string, _data: Record<string, unknown>) => {
+    return { error: null }
   }
 
   const value = useMemo<AppState>(
@@ -92,6 +105,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       logout,
       addInscricao,
       updateInscricaoStatus,
+      submitFichaConfirmacao,
       refreshInscricoes: loadInscricoes,
     }),
     [user, isAuthenticated, authLoading, inscricoes, loadInscricoes],

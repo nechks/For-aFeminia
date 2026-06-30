@@ -4,7 +4,7 @@ import { useApp } from '@/store/app-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription } from '@/components/ui/card'
 import {
   Accordion,
   AccordionContent,
@@ -15,12 +15,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/use-toast'
-import { ShieldAlert, CheckCircle2 } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 
 export default function FichaConfirmacao() {
   const { user, submitFichaConfirmacao, inscricoes } = useApp()
   const navigate = useNavigate()
-  const minhaInscricao = inscricoes.find((i) => i.usuarioId === user?.id)
+  const minhaInscricao = inscricoes.find((i) => i.user_id === user?.id)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   if (!minhaInscricao || minhaInscricao.status !== 'APROVADA') {
@@ -31,25 +31,9 @@ export default function FichaConfirmacao() {
     )
   }
 
-  if (minhaInscricao.fichaConfirmacaoPreenchida) {
-    return (
-      <div className="p-8 flex flex-col items-center justify-center min-h-[60vh]">
-        <CheckCircle2 className="w-16 h-16 text-emerald-500 mb-4" />
-        <h2 className="text-2xl font-bold">Ficha já preenchida!</h2>
-        <p className="text-muted-foreground mt-2">
-          Você já enviou suas informações. Acesse o painel para ver suas aulas.
-        </p>
-        <Button className="mt-6" onClick={() => navigate('/aluna/dashboard')}>
-          Ir para o Painel
-        </Button>
-      </div>
-    )
-  }
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
-    // Simulate network delay
     setTimeout(() => {
       submitFichaConfirmacao(user!.id, { preenchidaEm: new Date().toISOString() })
       toast({ title: 'Ficha enviada com sucesso!', description: 'Bem-vinda ao Força Feminina!' })
@@ -89,14 +73,14 @@ export default function FichaConfirmacao() {
                     <div>
                       <Label>Turma Selecionada</Label>
                       <Input
-                        value={minhaInscricao.turma.replace(/_/g, ' ')}
+                        value={(minhaInscricao.turma ?? '').replace(/_/g, ' ')}
                         disabled
                         className="bg-muted"
                       />
                     </div>
                     <div>
                       <Label>Nome Completo</Label>
-                      <Input value={minhaInscricao.nomeCompleto} disabled className="bg-muted" />
+                      <Input value={minhaInscricao.nome_completo} disabled className="bg-muted" />
                     </div>
                   </div>
                 </AccordionContent>
@@ -186,6 +170,7 @@ export default function FichaConfirmacao() {
                       as penas da lei.
                     </Label>
                   </div>
+                  <CardDescription>Li e concordo com os termos descritos acima.</CardDescription>
                 </AccordionContent>
               </AccordionItem>
             </Accordion>

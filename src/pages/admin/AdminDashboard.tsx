@@ -45,18 +45,17 @@ import {
   Users,
 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
+import { StatusInscricao } from '@/lib/types'
 
-const statusMap: Record<string, { label: string; color: string }> = {
+const statusMap: Record<StatusInscricao, { label: string; color: string }> = {
   AGUARDANDO: { label: 'Aguardando', color: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
   APROVADA: { label: 'Aprovada', color: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' },
   REPROVADA: { label: 'Reprovada', color: 'bg-rose-100 text-rose-800 hover:bg-rose-100' },
   EM_ANALISE: { label: 'Em Análise', color: 'bg-sky-100 text-sky-800 hover:bg-sky-100' },
-  LISTA_ESPERA: { label: 'Lista de Espera', color: 'bg-sky-100 text-sky-800 hover:bg-sky-100' },
-  CANCELADA: { label: 'Cancelada', color: 'bg-rose-100 text-rose-800 hover:bg-rose-100' },
 }
 
 const getStatusInfo = (status: string | undefined) =>
-  statusMap[status ?? ''] ?? {
+  statusMap[status as StatusInscricao] ?? {
     label: status ?? '—',
     color: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
   }
@@ -71,10 +70,9 @@ export default function AdminDashboard() {
 
   const [actionDialog, setActionDialog] = useState<{
     isOpen: boolean
-    type: 'APROVAR' | 'CANCELAR'
+    type: 'APROVAR' | 'REPROVAR'
     id: string | null
   }>({ isOpen: false, type: 'APROVAR', id: null })
-  const [dataAula, setDataAula] = useState('')
 
   const filteredInscricoes = inscricoes.filter((i: Record<string, unknown>) => {
     const nome = safeLower(i.nome_completo)
@@ -84,10 +82,10 @@ export default function AdminDashboard() {
     return matchText && matchStatus
   })
 
-  const handleAction = (id: string, action: 'APROVAR' | 'ESPERA' | 'CANCELAR') => {
-    if (action === 'ESPERA') {
-      updateInscricaoStatus(id, 'LISTA_ESPERA')
-      toast({ title: 'Movida para lista de espera' })
+  const handleAction = (id: string, action: 'APROVAR' | 'ANALISE' | 'REPROVAR') => {
+    if (action === 'ANALISE') {
+      updateInscricaoStatus(id, 'EM_ANALISE')
+      toast({ title: 'Inscrição marcada como em análise' })
     } else {
       setActionDialog({ isOpen: true, type: action, id })
     }
@@ -96,11 +94,11 @@ export default function AdminDashboard() {
   const confirmAction = () => {
     if (actionDialog.id) {
       if (actionDialog.type === 'APROVAR') {
-        updateInscricaoStatus(actionDialog.id, 'APROVADA', dataAula)
+        updateInscricaoStatus(actionDialog.id, 'APROVADA')
         toast({ title: 'Inscrição Aprovada!', description: 'Aluna notificada.' })
-      } else if (actionDialog.type === 'CANCELAR') {
-        updateInscricaoStatus(actionDialog.id, 'CANCELADA')
-        toast({ title: 'Inscrição Cancelada', variant: 'destructive' })
+      } else if (actionDialog.type === 'REPROVAR') {
+        updateInscricaoStatus(actionDialog.id, 'REPROVADA')
+        toast({ title: 'Inscrição Reprovada', variant: 'destructive' })
       }
     }
     setActionDialog({ isOpen: false, type: 'APROVAR', id: null })
@@ -240,16 +238,16 @@ export default function AdminDashboard() {
                               Aprovar Vaga
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleAction(inscricao.id as string, 'ESPERA')}
+                              onClick={() => handleAction(inscricao.id as string, 'ANALISE')}
                             >
-                              Lista de Espera
+                              Marcar em Análise
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               className="text-destructive"
-                              onClick={() => handleAction(inscricao.id as string, 'CANCELAR')}
+                              onClick={() => handleAction(inscricao.id as string, 'REPROVAR')}
                             >
-                              Cancelar Inscrição
+                              Reprovar Inscrição
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -277,21 +275,14 @@ export default function AdminDashboard() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {actionDialog.type === 'APROVAR' ? 'Aprovar Inscrição' : 'Cancelar Inscrição'}
+              {actionDialog.type === 'APROVAR' ? 'Aprovar Inscrição' : 'Reprovar Inscrição'}
             </DialogTitle>
             <DialogDescription>
               {actionDialog.type === 'APROVAR'
-                ? 'Defina a data da aula inaugural para confirmar a aprovação.'
-                : 'Tem certeza que deseja cancelar esta inscrição?'}
+                ? 'Confirme a aprovação da inscrição. A aluna será notificada.'
+                : 'Tem certeza que deseja reprovar esta inscrição?'}
             </DialogDescription>
           </DialogHeader>
-
-          {actionDialog.type === 'APROVAR' && (
-            <div className="py-4">
-              <label className="text-sm font-medium mb-2 block">Data da Aula Inaugural</label>
-              <Input type="date" value={dataAula} onChange={(e) => setDataAula(e.target.value)} />
-            </div>
-          )}
 
           <DialogFooter>
             <Button
@@ -301,7 +292,7 @@ export default function AdminDashboard() {
               Voltar
             </Button>
             <Button
-              variant={actionDialog.type === 'CANCELAR' ? 'destructive' : 'default'}
+              variant={actionDialog.type === 'REPROVAR' ? 'destructive' : 'default'}
               onClick={confirmAction}
             >
               Confirmar

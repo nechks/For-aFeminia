@@ -3,8 +3,16 @@ import { Sidebar, TopHeader } from './Navigation'
 import { useApp } from '@/store/app-context'
 
 export default function Layout() {
-  const { user } = useApp()
+  const { user, authLoading } = useApp()
   const location = useLocation()
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
+      </div>
+    )
+  }
 
   const isPublicRoute = location.pathname === '/' || location.pathname === '/inscricao'
 
