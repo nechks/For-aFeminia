@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getIndicadores, type IndicadoresData } from '@/services/indicadores'
+import { getResumoChamadas, type ResumoChamadas } from '@/services/chamadas-resumo'
 import { useRealtime } from '@/hooks/use-realtime'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
-import { Users, TrendingDown, FileText, AlertCircle, Loader2 } from 'lucide-react'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts'
+import { Users, TrendingDown, FileText, AlertCircle, Loader2, CalendarDays, UserCheck, UserX } from 'lucide-react'
 import { turmaLabels, statusInfo } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
 
@@ -12,12 +13,14 @@ const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b
 
 export default function GestaoDashboard() {
   const [data, setData] = useState<IndicadoresData | null>(null)
+  const [chamadas, setChamadas] = useState<ResumoChamadas | null>(null)
   const [loading, setLoading] = useState(true)
 
   const loadData = useCallback(async () => {
     try {
-      const result = await getIndicadores()
-      setData(result)
+      const [indicadores, resumo] = await Promise.all([getIndicadores(), getResumoChamadas()])
+      setData(indicadores)
+      setChamadas(resumo)
     } catch (err) {
       console.error('Failed to load indicadores:', err)
       toast({ title: 'Erro ao carregar indicadores', variant: 'destructive' })
@@ -115,6 +118,74 @@ export default function GestaoDashboard() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Resumo de Chamadas */}
+      <div>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <CalendarDays className="w-5 h-5 text-primary" /> Chamadas
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <Card>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium">Total de Aulas</CardTitle>
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{chamadas?.totalAulas ?? '—'}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium">Presenças Registradas</CardTitle>
+              <UserCheck className="h-4 w-4 text-emerald-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-emerald-600">{chamadas?.totalPresencas ?? '—'}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium">Faltas Registradas</CardTitle>
+              <UserX className="h-4 w-4 text-rose-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-rose-600">{chamadas?.totalFaltas ?? '—'}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {chamadas && chamadas.ultimasAulas.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Últimas Aulas — Presenças vs Faltas</CardTitle>
+              <CardDescription>Resultado das chamadas mais recentes</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={{ Presentes: { label: 'Presentes', color: '#10b981' }, Faltas: { label: 'Faltas', color: '#f43f5e' } }}
+                className="h-[220px] w-full"
+              >
+                <BarChart
+                  data={chamadas.ultimasAulas.map((a) => ({
+                    data: new Date(a.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+                    Presentes: a.presentes,
+                    Faltas: a.ausentes,
+                  }))}
+                  margin={{ top: 4, right: 8, left: -16, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="data" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis tickLine={false} axisLine={false} fontSize={12} allowDecimals={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend />
+                  <Bar dataKey="Presentes" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Faltas" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

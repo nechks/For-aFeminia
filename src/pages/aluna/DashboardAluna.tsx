@@ -6,6 +6,7 @@ import { DashboardData } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Calendar as CalendarIcon,
   MapPin,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { turmaLabels } from '@/lib/constants'
+import pb from '@/lib/pocketbase/client'
 
 export default function DashboardAluna() {
   const { user, minhaConfirmacao, isAuthenticated } = useApp()
@@ -66,13 +68,28 @@ export default function DashboardAluna() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">
-          Olá, {dashboard?.nome?.split(' ')[0] ?? user?.name?.split(' ')[0] ?? 'Aluna'}!
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Bem-vinda ao seu painel do Projeto Força Feminina.
-        </p>
+      <div className="flex items-center gap-4">
+        <Avatar className="h-14 w-14 border-2 border-primary/30">
+          {user?.avatar && (
+            <AvatarImage src={pb.files.getURL(user, user.avatar)} alt="Foto de perfil" />
+          )}
+          <AvatarFallback className="bg-primary/10 text-primary text-xl">
+            {(user?.nomeSocial || user?.name || '?')
+              .split(' ')
+              .slice(0, 2)
+              .map((p: string) => p[0])
+              .join('')
+              .toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Olá, {user?.nomeSocial?.split(' ')[0] ?? dashboard?.nome?.split(' ')[0] ?? user?.name?.split(' ')[0] ?? 'Aluna'}!
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Bem-vinda ao seu painel do Projeto Força Feminina.
+          </p>
+        </div>
       </div>
 
       {precisaPreencherFicha && (

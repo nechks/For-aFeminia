@@ -8,12 +8,16 @@ import Index from './pages/Index'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 import Inscricao from './pages/Inscricao'
-import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminDashboardPage from './pages/admin/AdminDashboardPage'
+import AdminInscricoes from './pages/admin/AdminInscricoes'
+import AdminUsuarios from './pages/admin/AdminUsuarios'
 import MuralManagement from './pages/admin/MuralManagement'
 import DashboardAluna from './pages/aluna/DashboardAluna'
+import PerfilAluna from './pages/aluna/PerfilAluna'
 import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
 import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
+import Atendimentos from './pages/professor/Atendimentos'
 import GestaoDashboard from './pages/gestao/GestaoDashboard'
 
 const ProtectedRoute = ({
@@ -46,7 +50,7 @@ const AppRoutes = () => (
         path="/admin/inscricoes"
         element={
           <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL', 'ASSISTENTE_SOCIAL']}>
-            <AdminDashboard />
+            <AdminInscricoes />
           </ProtectedRoute>
         }
       />
@@ -54,7 +58,15 @@ const AppRoutes = () => (
         path="/admin/dashboard"
         element={
           <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
-            <AdminDashboard />
+            <AdminDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/usuarios"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <AdminUsuarios />
           </ProtectedRoute>
         }
       />
@@ -85,6 +97,14 @@ const AppRoutes = () => (
         }
       />
       <Route
+        path="/aluna/perfil"
+        element={
+          <ProtectedRoute allowedRoles={['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+            <PerfilAluna />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/aluna/ficha"
         element={
           <ProtectedRoute allowedRoles={['ALUNA_FF']}>
@@ -106,6 +126,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute allowedRoles={['PROFESSOR']}>
             <Chamada />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/atendimentos"
+        element={
+          <ProtectedRoute allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+            <Atendimentos />
           </ProtectedRoute>
         }
       />

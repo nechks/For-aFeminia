@@ -21,8 +21,10 @@ export type TurmaFF =
 export interface Usuario {
   id: string
   name: string
+  nomeSocial?: string
   email: string
   perfil: PerfilUsuario
+  turma?: string
   ativo: boolean
   avatar?: string
   created: string
@@ -106,6 +108,25 @@ export interface CalendarioAula {
   data_aula: string
   created: string
   updated: string
+}
+
+export type TipoAcessoAtendimento = 'PUBLICO' | 'CONFIDENCIAL'
+
+export interface Atendimento {
+  id: string
+  created_by: string
+  aluna_id: string
+  data: string
+  horario: string
+  tipo_acesso: TipoAcessoAtendimento
+  relatorio: string
+  turma: string
+  created: string
+  updated: string
+  expand?: {
+    created_by?: Usuario
+    aluna_id?: Usuario
+  }
 }
 
 export interface DashboardData {
