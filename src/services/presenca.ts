@@ -6,7 +6,11 @@ export interface PresencaAluno {
   user_id: string
   nome_completo: string
   turma: string
-  presenca: { id: string; presente: boolean; justificativa: string } | null
+  presenca: {
+    id: string
+    presente: boolean
+    justificativa: string
+  } | null
 }
 
 export interface PresencaTurmaResponse {
@@ -15,29 +19,27 @@ export interface PresencaTurmaResponse {
   alunos: PresencaAluno[]
 }
 
-export const getPresencasTurma = async (
-  turma: string,
-  dataAula: string,
-): Promise<PresencaTurmaResponse> => {
-  return await pb.send(
-    `/backend/v1/presenca/turma/${encodeURIComponent(turma)}/aula/${encodeURIComponent(dataAula)}`,
-    { method: 'GET' },
-  )
-}
-
 export interface RegistroPresenca {
   user_id: string
   presente: boolean
   justificativa?: string
 }
 
+export const getPresencasTurma = async (
+  turma: string,
+  dataAula: string,
+): Promise<PresencaTurmaResponse> => {
+  const params = new URLSearchParams({ turma, dataAula })
+  return pb.send(`/backend/v1/professor/presenca?${params.toString()}`, { method: 'GET' })
+}
+
 export const registrarPresencas = async (
   dataAula: string,
   registros: RegistroPresenca[],
 ): Promise<any> => {
-  return await pb.send('/backend/v1/presenca/registrar', {
+  return pb.send('/backend/v1/professor/presenca', {
     method: 'POST',
-    body: JSON.stringify({ data_aula: dataAula, registros }),
+    body: JSON.stringify({ dataAula, registros }),
     headers: { 'Content-Type': 'application/json' },
   })
 }

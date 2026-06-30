@@ -1,4 +1,9 @@
-export type PerfilUsuario = 'ALUNA_FF' | 'PROFESSOR' | 'ASSISTENTE_SOCIAL' | 'ADMIN' | 'GESTAO'
+export type PerfilUsuario =
+  | 'ALUNA_FF'
+  | 'PROFESSOR'
+  | 'ASSISTENTE_SOCIAL'
+  | 'ADMINISTRATIVO'
+  | 'GESTAO_GERAL'
 export type StatusInscricao =
   | 'AGUARDANDO'
   | 'APROVADA'

@@ -1,9 +1,22 @@
 onRecordUpdateRequest((e) => {
   const auth = e.requestInfo().auth
-  if (!auth || auth.getString('perfil') !== 'ASSISTENTE_SOCIAL') return e.next()
+  if (!auth) return e.next()
 
+  const perfil = auth.getString('perfil')
   const body = e.requestInfo().body || {}
-  const allowed = ['secao_6_socioeconomico', 'secao_7_violencia']
+  const socialSections = ['secao_6_socioeconomico', 'secao_7_violencia']
+
+  if (perfil === 'ADMINISTRATIVO') {
+    for (const key of Object.keys(body)) {
+      if (socialSections.includes(key)) {
+        return e.forbiddenError('Dados sociais sao restritos a Assistente Social e Gestao Geral.')
+      }
+    }
+  }
+
+  if (perfil !== 'ASSISTENTE_SOCIAL') return e.next()
+
+  const allowed = socialSections
 
   for (const key of Object.keys(body)) {
     if (!allowed.includes(key)) {

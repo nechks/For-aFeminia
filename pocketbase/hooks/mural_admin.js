@@ -5,8 +5,8 @@ routerAdd(
     const auth = e.auth
     if (!auth) return e.unauthorizedError('Autenticação necessária')
     const perfil = auth.getString('perfil')
-    if (perfil !== 'ADMIN' && perfil !== 'GESTAO') {
-      return e.forbiddenError('Acesso restrito a administradores e gestão.')
+    if (perfil !== 'ADMINISTRATIVO' && perfil !== 'GESTAO_GERAL') {
+      return e.forbiddenError('Acesso restrito a Administrativo e Gestão Geral.')
     }
 
     const body = e.requestInfo().body || {}

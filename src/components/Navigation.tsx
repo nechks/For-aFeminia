@@ -13,6 +13,7 @@ import {
   Bell,
   FileText,
   Menu,
+  BarChart3,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useState } from 'react'
@@ -30,13 +31,19 @@ const navItems: NavItem[] = [
     title: 'Dashboard',
     href: '/admin/dashboard',
     icon: LayoutDashboard,
-    roles: ['ADMIN', 'GESTAO'],
+    roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
   },
   {
     title: 'Inscrições',
     href: '/admin/inscricoes',
     icon: Users,
-    roles: ['ADMIN', 'GESTAO', 'ASSISTENTE_SOCIAL'],
+    roles: ['ADMINISTRATIVO', 'GESTAO_GERAL', 'ASSISTENTE_SOCIAL'],
+  },
+  {
+    title: 'Indicadores',
+    href: '/gestao/dashboard',
+    icon: BarChart3,
+    roles: ['GESTAO_GERAL'],
   },
   { title: 'Meu Painel', href: '/aluna/dashboard', icon: LayoutDashboard, roles: ['ALUNA_FF'] },
   { title: 'Ficha de Confirmação', href: '/aluna/ficha', icon: FileText, roles: ['ALUNA_FF'] },
@@ -46,13 +53,7 @@ const navItems: NavItem[] = [
     title: 'Mural',
     href: '/admin/mural',
     icon: Bell,
-    roles: ['ADMIN', 'GESTAO'],
-  },
-  {
-    title: 'Dashboard',
-    href: '/admin/dashboard',
-    icon: LayoutDashboard,
-    roles: ['ADMIN', 'GESTAO'],
+    roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
   },
 ]
 

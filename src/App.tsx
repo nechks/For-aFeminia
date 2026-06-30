@@ -14,8 +14,8 @@ import DashboardAluna from './pages/aluna/DashboardAluna'
 import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
 import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
+import GestaoDashboard from './pages/gestao/GestaoDashboard'
 
-// Protected Route Wrapper
 const ProtectedRoute = ({
   children,
   allowedRoles,
@@ -42,11 +42,10 @@ const AppRoutes = () => (
       <Route path="/" element={<Index />} />
       <Route path="/inscricao" element={<Inscricao />} />
 
-      {/* Admin Routes */}
       <Route
         path="/admin/inscricoes"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO', 'ASSISTENTE_SOCIAL']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL', 'ASSISTENTE_SOCIAL']}>
             <AdminDashboard />
           </ProtectedRoute>
         }
@@ -54,7 +53,7 @@ const AppRoutes = () => (
       <Route
         path="/admin/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
             <AdminDashboard />
           </ProtectedRoute>
         }
@@ -62,13 +61,21 @@ const AppRoutes = () => (
       <Route
         path="/admin/mural"
         element={
-          <ProtectedRoute allowedRoles={['ADMIN', 'GESTAO']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
             <MuralManagement />
           </ProtectedRoute>
         }
       />
 
-      {/* Aluna Routes */}
+      <Route
+        path="/gestao/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+            <GestaoDashboard />
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/aluna/dashboard"
         element={
@@ -94,7 +101,6 @@ const AppRoutes = () => (
         }
       />
 
-      {/* Professor Routes */}
       <Route
         path="/professor/chamada"
         element={

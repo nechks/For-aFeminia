@@ -1,58 +1,67 @@
 routerAdd(
   'GET',
-  '/backend/v1/presenca/turma/{turma}/aula/{dataAula}',
+  '/backend/v1/professor/presenca',
   (e) => {
     const auth = e.auth
     if (!auth) return e.unauthorizedError('Autenticação necessária')
     if (auth.getString('perfil') !== 'PROFESSOR') {
-      return e.forbiddenError('Acesso restrito a professores.')
+      return e.forbiddenError('Acesso restrito a Professores.')
     }
 
-    const turma = e.request.pathValue('turma')
-    const dataAula = e.request.pathValue('dataAula')
+    const query = e.requestInfo().query || {}
+    const turma = query.turma || ''
+    const dataAula = query.dataAula || ''
 
-    if (!turma || !dataAula) {
-      return e.badRequestError('Turma e data da aula são obrigatórios.')
-    }
+    if (!turma) return e.badRequestError('turma é obrigatório.')
+    if (!dataAula) return e.badRequestError('dataAula é obrigatório.')
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataAula)) {
-      return e.badRequestError('Formato de data inválido. Use YYYY-MM-DD.')
-    }
+    try {
+      var inscricoes = $app.findRecordsByFilter(
+        'ficha_inscricao_ff',
+        "turma = '" + turma + "' && status = 'APROVADA'",
+        'nome_completo',
+        0,
+        0,
+      )
 
-    var alunos = $app.findRecordsByFilter(
-      'ficha_inscricao_ff',
-      "turma = '" + turma + "' && status = 'APROVADA'",
-      'nome_completo',
-      0,
-      0,
-    )
+      var alunos = []
+      for (var i = 0; i < inscricoes.length; i++) {
+        var insc = inscricoes[i]
+        var userId = insc.getString('user_id')
+        var nomeCompleto = insc.getString('nome_completo')
 
-    var presencas = $app.findRecordsByFilter('presenca', "data_aula = '" + dataAula + "'", '', 0, 0)
+        var presenca = null
+        if (userId) {
+          try {
+            var pRecord = $app.findFirstRecordByFilter(
+              'presenca',
+              "user_id = '" + userId + "' && data_aula = '" + dataAula + "'",
+            )
+            presenca = {
+              id: pRecord.id,
+              presente: pRecord.getBool('presente'),
+              justificativa: pRecord.getString('justificativa'),
+            }
+          } catch (_) {}
+        }
 
-    var presencaMap = {}
-    for (var i = 0; i < presencas.length; i++) {
-      var p = presencas[i]
-      presencaMap[p.getString('user_id')] = {
-        id: p.id,
-        presente: p.getBool('presente'),
-        justificativa: p.getString('justificativa'),
+        alunos.push({
+          inscricao_id: insc.id,
+          user_id: userId,
+          nome_completo: nomeCompleto,
+          turma: turma,
+          presenca: presenca,
+        })
       }
-    }
 
-    var resultado = []
-    for (var j = 0; j < alunos.length; j++) {
-      var a = alunos[j]
-      var uid = a.getString('user_id')
-      resultado.push({
-        inscricao_id: a.id,
-        user_id: uid,
-        nome_completo: a.getString('nome_completo'),
-        turma: a.getString('turma'),
-        presenca: presencaMap[uid] || null,
+      return e.json(200, {
+        turma: turma,
+        dataAula: dataAula,
+        alunos: alunos,
       })
+    } catch (err) {
+      return e.json(500, { error: 'internal_error', message: 'Erro ao listar presenças.' })
     }
-
-    return e.json(200, { turma: turma, dataAula: dataAula, alunos: resultado })
   },
   $apis.requireAuth(),
 )
