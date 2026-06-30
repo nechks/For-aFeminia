@@ -4,8 +4,7 @@ migrate(
     app.db().newQuery("UPDATE users SET perfil = 'GESTAO_GERAL' WHERE perfil = 'GESTAO'").execute()
 
     var usersCol = app.findCollectionByNameOrId('users')
-    var oldPerfilField = usersCol.fields.getByName('perfil')
-    usersCol.fields.remove(oldPerfilField)
+    usersCol.fields.removeByName('perfil')
     usersCol.fields.add(
       new SelectField({
         name: 'perfil',
@@ -83,8 +82,7 @@ migrate(
     app.db().newQuery("UPDATE users SET perfil = 'GESTAO' WHERE perfil = 'GESTAO_GERAL'").execute()
 
     var usersCol = app.findCollectionByNameOrId('users')
-    var oldField = usersCol.fields.getByName('perfil')
-    usersCol.fields.remove(oldField)
+    usersCol.fields.removeByName('perfil')
     usersCol.fields.add(
       new SelectField({
         name: 'perfil',

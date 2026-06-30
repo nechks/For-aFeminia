@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-06-30T02:39:24.855Z",
+  "generatedAt": "2026-06-30T02:48:14.337Z",
   "collections": [
     {
       "name": "users",
       "type": "auth",
       "apiRules": {
-        "list": "@request.auth.id = id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "view": "@request.auth.id = id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
+        "list": "@request.auth.id = id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "view": "@request.auth.id = id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
         "create": "",
-        "update": "id = @request.auth.id || @request.auth.perfil = \"ADMIN\"",
+        "update": "id = @request.auth.id || @request.auth.perfil = \"ADMINISTRATIVO\"",
         "delete": "id = @request.auth.id"
       },
       "fields": [
@@ -39,17 +39,23 @@
           "autodateTriggers": ["onCreate", "onUpdate"]
         },
         {
-          "name": "perfil",
-          "type": "select",
-          "required": true,
-          "system": false,
-          "selectValues": ["ALUNA_FF", "PROFESSOR", "ASSISTENTE_SOCIAL", "ADMIN", "GESTAO"]
-        },
-        {
           "name": "ativo",
           "type": "bool",
           "required": false,
           "system": false
+        },
+        {
+          "name": "perfil",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "ALUNA_FF",
+            "PROFESSOR",
+            "ASSISTENTE_SOCIAL",
+            "ADMINISTRATIVO",
+            "GESTAO_GERAL"
+          ]
         }
       ],
       "indexes": [
@@ -61,11 +67,11 @@
       "name": "ficha_inscricao_ff",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
-        "view": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "list": "@request.auth.id = user_id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "view": "@request.auth.id = user_id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
         "create": "",
-        "update": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\"",
-        "delete": "@request.auth.perfil = \"ADMIN\""
+        "update": "@request.auth.id = user_id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\""
       },
       "fields": [
         {
@@ -197,11 +203,11 @@
       "name": "ficha_confirmacao_ff",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
-        "view": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "list": "@request.auth.id = user_id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "view": "@request.auth.id = user_id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
         "create": "@request.auth.id != \"\"",
-        "update": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
-        "delete": "@request.auth.perfil = \"ADMIN\""
+        "update": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\""
       },
       "fields": [
         {
@@ -303,8 +309,8 @@
         "list": "@request.auth.id != \"\"",
         "view": "@request.auth.id != \"\"",
         "create": "@request.auth.id != \"\"",
-        "update": "@request.auth.perfil = \"ADMIN\"",
-        "delete": "@request.auth.perfil = \"ADMIN\""
+        "update": "@request.auth.perfil = \"ADMINISTRATIVO\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\""
       },
       "fields": [
         {
@@ -348,11 +354,11 @@
       "name": "presenca",
       "type": "base",
       "apiRules": {
-        "list": "@request.auth.id = user_id || @request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "view": "@request.auth.id = user_id || @request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "create": "@request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "update": "@request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "delete": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\""
+        "list": "@request.auth.id = user_id || @request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "view": "@request.auth.id = user_id || @request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "create": "@request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "update": "@request.auth.perfil = \"PROFESSOR\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\""
       },
       "fields": [
         {
@@ -407,9 +413,9 @@
       "apiRules": {
         "list": "@request.auth.id != \"\"",
         "view": "@request.auth.id != \"\"",
-        "create": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "update": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "delete": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\""
+        "create": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "update": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\""
       },
       "fields": [
         {
@@ -459,9 +465,9 @@
       "apiRules": {
         "list": "@request.auth.id != \"\"",
         "view": "@request.auth.id != \"\"",
-        "create": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "update": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\"",
-        "delete": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\""
+        "create": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "update": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\""
       },
       "fields": [
         {
