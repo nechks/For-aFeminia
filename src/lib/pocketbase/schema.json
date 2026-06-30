@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-30T01:20:38.721Z",
+  "generatedAt": "2026-06-30T01:42:29.668Z",
   "collections": [
     {
       "name": "users",
@@ -192,6 +192,157 @@
         "CREATE INDEX idx_ficha_user_id ON ficha_inscricao_ff (user_id)",
         "CREATE INDEX idx_ficha_cpf ON ficha_inscricao_ff (cpf)"
       ]
+    },
+    {
+      "name": "ficha_confirmacao_ff",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "view": "@request.auth.id = user_id || @request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.perfil = \"ADMIN\" || @request.auth.perfil = \"GESTAO\" || @request.auth.perfil = \"ASSISTENTE_SOCIAL\"",
+        "delete": "@request.auth.perfil = \"ADMIN\""
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "inscricao_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "ficha_inscricao_ff"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["PREENCHIDA", "EM_REVISAO"]
+        },
+        {
+          "name": "secao_1_dados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_2_dados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_3_dados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_4_dados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_5_dados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_6_socioeconomico",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_7_violencia",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secao_8_declaracoes",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "aceite_lgpd",
+          "type": "bool",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_ficha_conf_user ON ficha_confirmacao_ff (user_id)"]
+    },
+    {
+      "name": "documentos_anexos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != \"\"",
+        "view": "@request.auth.id != \"\"",
+        "create": "@request.auth.id != \"\"",
+        "update": "@request.auth.perfil = \"ADMIN\"",
+        "delete": "@request.auth.perfil = \"ADMIN\""
+      },
+      "fields": [
+        {
+          "name": "confirmacao_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "ficha_confirmacao_ff"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["RG", "CPF", "PERFIL"]
+        },
+        {
+          "name": "arquivo",
+          "type": "file",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_doc_conf ON documentos_anexos (confirmacao_id)"]
     }
   ]
 }

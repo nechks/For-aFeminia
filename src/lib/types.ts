@@ -45,3 +45,32 @@ export interface FichaInscricaoFF {
   created: string
   updated: string
 }
+
+export type StatusConfirmacao = 'PREENCHIDA' | 'EM_REVISAO'
+
+export interface FichaConfirmacaoFF {
+  id: string
+  user_id: string
+  inscricao_id: string
+  status: StatusConfirmacao
+  secao_1_dados: string
+  secao_2_dados: string
+  secao_3_dados: string
+  secao_4_dados: string
+  secao_5_dados: string
+  secao_6_socioeconomico: string
+  secao_7_violencia: string
+  secao_8_declaracoes: string
+  aceite_lgpd: boolean
+  created: string
+  updated: string
+}
+
+export interface DocumentosAnexos {
+  id: string
+  confirmacao_id: string
+  tipo: 'RG' | 'CPF' | 'PERFIL'
+  arquivo: string
+  created: string
+  updated: string
+}

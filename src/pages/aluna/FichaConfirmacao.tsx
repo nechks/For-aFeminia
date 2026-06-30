@@ -1,191 +1,202 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/app-context'
+import { getMinhaConfirmacao, submitConfirmacao } from '@/services/ficha-confirmacao'
+import { formSections } from '@/lib/confirmacao-fields'
+import { FieldRenderer } from '@/components/confirmacao/FieldRenderer'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription } from '@/components/ui/card'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/use-toast'
-import { ShieldAlert } from 'lucide-react'
+import { ArrowRight, ArrowLeft, CheckCircle2, Lock } from 'lucide-react'
 
 export default function FichaConfirmacao() {
-  const { user, submitFichaConfirmacao, inscricoes } = useApp()
+  const { user, inscricoes } = useApp()
   const navigate = useNavigate()
   const minhaInscricao = inscricoes.find((i) => i.user_id === user?.id)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [step, setStep] = useState(1)
+  const [values, setValues] = useState<Record<string, any>>({})
+  const [files, setFiles] = useState<Record<string, File>>({})
+  const [submitted, setSubmitted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
-  if (!minhaInscricao || minhaInscricao.status !== 'APROVADA') {
+  useEffect(() => {
+    if (!user) return
+    getMinhaConfirmacao(user.id)
+      .then((res) => {
+        if (res) setSubmitted(true)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [user])
+
+  useEffect(() => {
+    if (!minhaInscricao) return
+    const prefilled: Record<string, any> = {}
+    formSections.forEach((s) =>
+      s.fields.forEach((f) => {
+        if (f.prefillKey) {
+          const v = (minhaInscricao as any)[f.prefillKey]
+          if (v != null) prefilled[f.name] = v
+        }
+      }),
+    )
+    setValues((prev) => ({ ...prefilled, ...prev }))
+  }, [minhaInscricao])
+
+  if (loading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>
+  if (!minhaInscricao || minhaInscricao.status !== 'APROVADA')
     return (
       <div className="p-8 text-center">
         Acesso negado. Apenas alunas aprovadas podem preencher esta ficha.
       </div>
     )
+  if (submitted)
+    return (
+      <div className="max-w-md mx-auto text-center py-12">
+        <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold">Ficha Enviada!</h1>
+        <p className="text-muted-foreground mt-2">
+          Sua ficha foi registrada e nao pode ser modificada.
+        </p>
+        <Button className="mt-6" onClick={() => navigate('/aluna/dashboard')}>
+          Voltar ao Painel
+        </Button>
+      </div>
+    )
+
+  const section = formSections[step - 1]
+  const totalSteps = formSections.length
+  const handleChange = (n: string, v: any) => setValues((p) => ({ ...p, [n]: v }))
+  const handleFileChange = (n: string, f: File | null) =>
+    setFiles((p) => {
+      const n2 = { ...p }
+      if (f) n2[n] = f
+      else delete n2[n]
+      return n2
+    })
+
+  const validateStep = () => {
+    for (const f of section.fields)
+      if (f.required && f.type === 'checkbox' && !values[f.name]) return false
+      else if (f.required && f.type !== 'checkbox' && !values[f.name]) return false
+    if (step === totalSteps && (!files.foto_rg || !files.foto_cpf || !files.foto_perfil))
+      return false
+    return true
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setTimeout(() => {
-      submitFichaConfirmacao(user!.id, { preenchidaEm: new Date().toISOString() })
-      toast({ title: 'Ficha enviada com sucesso!', description: 'Bem-vinda ao Força Feminina!' })
-      navigate('/aluna/dashboard')
-    }, 1000)
+  const handleNext = () => {
+    if (!validateStep()) {
+      toast({ title: 'Preencha os campos obrigatorios', variant: 'destructive' })
+      return
+    }
+    setStep((s) => Math.min(s + 1, totalSteps))
+  }
+
+  const handleSubmit = async () => {
+    if (!validateStep()) {
+      toast({ title: 'Preencha todos os campos obrigatorios', variant: 'destructive' })
+      return
+    }
+    setSubmitting(true)
+    try {
+      const fd = new FormData()
+      formSections.forEach((s) => {
+        const d: Record<string, any> = {}
+        s.fields.forEach((f) => {
+          if (values[f.name] != null) d[f.name] = values[f.name]
+        })
+        fd.append(s.storageKey, JSON.stringify(d))
+      })
+      fd.append('aceite_lgpd', 'true')
+      fd.append('foto_rg', files.foto_rg)
+      fd.append('foto_cpf', files.foto_cpf)
+      fd.append('foto_perfil', files.foto_perfil)
+      await submitConfirmacao(fd)
+      setSubmitted(true)
+      toast({ title: 'Ficha enviada com sucesso!' })
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err?.message || 'Verifique os dados.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
+    <div className="max-w-2xl mx-auto space-y-6 pb-12">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Ficha de Confirmação</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Ficha de Confirmacao</h1>
         <p className="text-muted-foreground mt-1">
-          Preencha com atenção. Estes dados são essenciais para o acompanhamento da equipe
-          multidisciplinar.
+          Passo {step} de {totalSteps}
         </p>
       </div>
-
-      <div className="bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg flex gap-3 text-sm">
-        <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
-        <p>
-          <strong>Privacidade e Sigilo:</strong> As informações das seções de Saúde, Socioeconômico
-          e Vulnerabilidade são de nível <em>Confidencial</em> e acessadas exclusivamente pela
-          Assistente Social e Coordenação do projeto.
-        </p>
-      </div>
-
+      <Progress value={(step / totalSteps) * 100} className="h-2" />
+      {section.confidential && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg flex gap-2 text-sm">
+          <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+          <p>Secao Confidencial — acessivel apenas a Assistente Social e Coordenacao.</p>
+        </div>
+      )}
       <Card>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="p-6">
-            <Accordion type="single" collapsible defaultValue="item-1" className="w-full space-y-4">
-              <AccordionItem value="item-1" className="border rounded-lg px-4 bg-card">
-                <AccordionTrigger className="hover:no-underline font-semibold">
-                  1. Confirmação de Turma e Dados Base
-                </AccordionTrigger>
-                <AccordionContent className="space-y-4 pt-2 pb-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Turma Selecionada</Label>
-                      <Input
-                        value={(minhaInscricao.turma ?? '').replace(/_/g, ' ')}
-                        disabled
-                        className="bg-muted"
-                      />
-                    </div>
-                    <div>
-                      <Label>Nome Completo</Label>
-                      <Input value={minhaInscricao.nome_completo} disabled className="bg-muted" />
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="item-3" className="border rounded-lg px-4 bg-card">
-                <AccordionTrigger className="hover:no-underline font-semibold">
-                  2. Tamanhos de Uniforme
-                </AccordionTrigger>
-                <AccordionContent className="space-y-6 pt-2 pb-4">
-                  <div className="space-y-3">
-                    <Label>Tamanho da Camisa</Label>
-                    <RadioGroup defaultValue="M" className="flex gap-4">
-                      {['PP', 'P', 'M', 'G', 'GG', 'XG'].map((size) => (
-                        <div className="flex items-center space-x-2" key={size}>
-                          <RadioGroupItem value={size} id={`c-${size}`} />
-                          <Label htmlFor={`c-${size}`}>{size}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="item-4" className="border rounded-lg px-4 bg-card">
-                <AccordionTrigger className="hover:no-underline font-semibold">
-                  3. Questionário de Saúde
-                </AccordionTrigger>
-                <AccordionContent className="space-y-4 pt-2 pb-4">
-                  <div className="space-y-2">
-                    <Label>Possui alguma comorbidade ou restrição física?</Label>
-                    <Textarea placeholder="Ex: Asma, problemas articulares, hipertensão..." />
-                  </div>
-                  <div className="flex items-center space-x-2 pt-2">
-                    <Checkbox id="medicacao" />
-                    <Label htmlFor="medicacao">Faço uso contínuo de medicação</Label>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem value="item-6" className="border rounded-lg px-4 bg-card">
-                <AccordionTrigger className="hover:no-underline font-semibold text-primary">
-                  4. Perfil Socioeconômico (Confidencial)
-                </AccordionTrigger>
-                <AccordionContent className="space-y-4 pt-2 pb-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Situação de Trabalho Atual</Label>
-                      <select className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background">
-                        <option>Desempregada</option>
-                        <option>Trabalho Informal</option>
-                        <option>CLT</option>
-                        <option>Autônoma</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Renda Familiar Per Capita</Label>
-                      <select className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm">
-                        <option>Até 1/2 salário mínimo</option>
-                        <option>De 1/2 a 1 salário mínimo</option>
-                        <option>Mais de 1 salário mínimo</option>
-                      </select>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              <AccordionItem
-                value="item-8"
-                className="border rounded-lg px-4 bg-card border-primary/20 bg-primary/5"
-              >
-                <AccordionTrigger className="hover:no-underline font-semibold">
-                  5. Termos Finais
-                </AccordionTrigger>
-                <AccordionContent className="space-y-4 pt-2 pb-4">
-                  <div className="flex items-start space-x-3">
-                    <Checkbox id="term1" required className="mt-1" />
-                    <Label htmlFor="term1" className="leading-snug">
-                      Estou ciente da carga horária e me comprometo a ter no mínimo 75% de
-                      frequência para manter a vaga e receber o certificado.
-                    </Label>
-                  </div>
-                  <div className="flex items-start space-x-3">
-                    <Checkbox id="term2" required className="mt-1" />
-                    <Label htmlFor="term2" className="leading-snug">
-                      Confirmo a veracidade de todas as informações prestadas neste formulário sob
-                      as penas da lei.
-                    </Label>
-                  </div>
-                  <CardDescription>Li e concordo com os termos descritos acima.</CardDescription>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          </CardContent>
-          <div className="p-6 pt-0 flex justify-end">
-            <Button
-              type="submit"
-              size="lg"
-              disabled={isSubmitting}
-              className="px-8 bg-secondary hover:bg-secondary/90"
-            >
-              {isSubmitting ? 'Enviando...' : 'Finalizar Confirmação'}
-            </Button>
+        <CardContent className="p-6 space-y-4">
+          <h2 className="text-xl font-semibold">{section.title}</h2>
+          {section.description && (
+            <p className="text-sm text-muted-foreground">{section.description}</p>
+          )}
+          <div className="space-y-4">
+            {section.fields.map((f) => (
+              <FieldRenderer
+                key={f.name}
+                field={f}
+                value={values[f.name]}
+                onChange={(v) => handleChange(f.name, v)}
+              />
+            ))}
           </div>
-        </form>
+          {step === totalSteps && (
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="font-semibold">Documentos Obrigatorios</h3>
+              {[
+                { n: 'foto_rg', l: 'Foto do RG' },
+                { n: 'foto_cpf', l: 'Foto do CPF' },
+                { n: 'foto_perfil', l: 'Foto de Perfil' },
+              ].map((d) => (
+                <div key={d.n} className="space-y-2">
+                  <Label>{d.l}</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,application/pdf"
+                      onChange={(e) => handleFileChange(d.n, e.target.files?.[0] || null)}
+                      className="text-sm"
+                    />
+                    {files[d.n] && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        <div className="p-6 pt-0 flex justify-between">
+          <Button variant="outline" onClick={() => setStep((s) => s - 1)} disabled={step === 1}>
+            <ArrowLeft className="w-4 h-4 mr-2" /> Anterior
+          </Button>
+          {step < totalSteps ? (
+            <Button onClick={handleNext}>
+              Proximo <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          ) : (
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? 'Enviando...' : 'Concluir'}
+            </Button>
+          )}
+        </div>
       </Card>
     </div>
   )

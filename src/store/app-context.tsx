@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useRealtime } from '@/hooks/use-realtime'
 import { FichaInscricaoFF, StatusInscricao, Usuario } from '@/lib/types'
 import { getInscricoes, createInscricao, updateStatus } from '@/services/ficha-inscricao'
+import { getMinhaConfirmacao, submitConfirmacao } from '@/services/ficha-confirmacao'
 
 interface AppState {
   user: Usuario | null
@@ -26,7 +27,8 @@ interface AppState {
     status: StatusInscricao,
     extraData?: Record<string, unknown>,
   ) => Promise<{ error: any }>
-  submitFichaConfirmacao: (userId: string, data: Record<string, unknown>) => Promise<{ error: any }>
+  submitFichaConfirmacao: (formData: FormData) => Promise<{ error: any }>
+  minhaConfirmacao: any
   refreshInscricoes: () => Promise<void>
 }
 
@@ -35,6 +37,7 @@ const AppContext = createContext<AppState | undefined>(undefined)
 export function AppProvider({ children }: { children: ReactNode }) {
   const { user, signIn, signOut, signUp, isAuthenticated, loading: authLoading } = useAuth()
   const [inscricoes, setInscricoes] = useState<FichaInscricaoFF[]>([])
+  const [minhaConfirmacao, setMinhaConfirmacao] = useState<any>(null)
 
   const loadInscricoes = useCallback(async () => {
     if (!isAuthenticated) {
@@ -53,10 +56,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadInscricoes()
   }, [loadInscricoes])
 
+  const loadMinhaConfirmacao = useCallback(async () => {
+    if (!isAuthenticated || !user) {
+      setMinhaConfirmacao(null)
+      return
+    }
+    try {
+      const result = await getMinhaConfirmacao(user.id)
+      setMinhaConfirmacao(result)
+    } catch {
+      setMinhaConfirmacao(null)
+    }
+  }, [isAuthenticated, user])
+
+  useEffect(() => {
+    loadMinhaConfirmacao()
+  }, [loadMinhaConfirmacao])
+
   useRealtime(
     'ficha_inscricao_ff',
     () => {
       loadInscricoes()
+    },
+    isAuthenticated,
+  )
+
+  useRealtime(
+    'ficha_confirmacao_ff',
+    () => {
+      loadMinhaConfirmacao()
     },
     isAuthenticated,
   )
@@ -90,8 +118,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const submitFichaConfirmacao = async (_userId: string, _data: Record<string, unknown>) => {
-    return { error: null }
+  const submitFichaConfirmacao = async (formData: FormData) => {
+    try {
+      await submitConfirmacao(formData)
+      await loadMinhaConfirmacao()
+      return { error: null }
+    } catch (error) {
+      return { error }
+    }
   }
 
   const value = useMemo<AppState>(
@@ -106,9 +140,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addInscricao,
       updateInscricaoStatus,
       submitFichaConfirmacao,
+      minhaConfirmacao,
       refreshInscricoes: loadInscricoes,
     }),
-    [user, isAuthenticated, authLoading, inscricoes, loadInscricoes],
+    [user, isAuthenticated, authLoading, inscricoes, minhaConfirmacao, loadInscricoes],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

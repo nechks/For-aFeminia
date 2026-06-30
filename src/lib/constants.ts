@@ -25,3 +25,17 @@ export const getStatusInfo = (status: string | undefined) =>
     label: status ?? '—',
     color: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
   }
+
+export const confirmacaoStatusInfo: Record<string, { label: string; color: string }> = {
+  PREENCHIDA: {
+    label: 'Preenchida',
+    color: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100',
+  },
+  EM_REVISAO: { label: 'Em Revisão', color: 'bg-sky-100 text-sky-800 hover:bg-sky-100' },
+}
+
+export const getConfirmacaoStatusInfo = (status: string | undefined) =>
+  confirmacaoStatusInfo[status ?? ''] ?? {
+    label: status ?? '—',
+    color: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
+  }

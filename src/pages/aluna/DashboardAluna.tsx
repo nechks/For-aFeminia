@@ -13,14 +13,14 @@ import {
 import { Link } from 'react-router-dom'
 
 export default function DashboardAluna() {
-  const { user, inscricoes } = useApp()
+  const { user, inscricoes, minhaConfirmacao } = useApp()
   const minhaInscricao = inscricoes.find((i) => i.user_id === user?.id)
 
   if (!minhaInscricao) {
     return <div className="p-8 text-center text-muted-foreground">Inscrição não encontrada.</div>
   }
 
-  const precisaPreencherFicha = minhaInscricao.status === 'APROVADA'
+  const precisaPreencherFicha = minhaInscricao.status === 'APROVADA' && !minhaConfirmacao
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
