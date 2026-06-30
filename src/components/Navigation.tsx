@@ -76,12 +76,14 @@ export function Sidebar() {
         <div className="flex items-center gap-3 mb-4 px-2">
           <Avatar className="h-9 w-9 border">
             <AvatarFallback className="bg-primary/10 text-primary">
-              {user.nomeCompleto.charAt(0)}
+              {(user.name ?? user.nomeCompleto ?? '?').charAt(0)}
             </AvatarFallback>
           </Avatar>
           <div className="flex flex-col overflow-hidden">
-            <span className="text-sm font-medium truncate">{user.nomeCompleto}</span>
-            <span className="text-xs text-muted-foreground truncate">{user.perfil}</span>
+            <span className="text-sm font-medium truncate">
+              {user.name ?? user.nomeCompleto ?? 'Usuário'}
+            </span>
+            <span className="text-xs text-muted-foreground truncate">{user.perfil ?? '—'}</span>
           </div>
         </div>
         <Button
