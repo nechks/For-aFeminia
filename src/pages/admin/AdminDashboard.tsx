@@ -35,23 +35,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MoreHorizontal, Search, CheckCircle, Clock, XCircle, ListFilter } from 'lucide-react'
-import { StatusInscricao } from '@/lib/types'
+import {
+  MoreHorizontal,
+  Search,
+  CheckCircle,
+  Clock,
+  XCircle,
+  ListFilter,
+  Users,
+} from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 
-const statusMap = {
+const statusMap: Record<string, { label: string; color: string }> = {
   AGUARDANDO: { label: 'Aguardando', color: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
   APROVADA: { label: 'Aprovada', color: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' },
+  REPROVADA: { label: 'Reprovada', color: 'bg-rose-100 text-rose-800 hover:bg-rose-100' },
+  EM_ANALISE: { label: 'Em Análise', color: 'bg-sky-100 text-sky-800 hover:bg-sky-100' },
   LISTA_ESPERA: { label: 'Lista de Espera', color: 'bg-sky-100 text-sky-800 hover:bg-sky-100' },
   CANCELADA: { label: 'Cancelada', color: 'bg-rose-100 text-rose-800 hover:bg-rose-100' },
 }
+
+const getStatusInfo = (status: string | undefined) =>
+  statusMap[status ?? ''] ?? {
+    label: status ?? '—',
+    color: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
+  }
+
+const safeStr = (val: unknown): string => (typeof val === 'string' ? val : '')
+const safeLower = (val: unknown): string => safeStr(val).toLowerCase()
 
 export default function AdminDashboard() {
   const { inscricoes, updateInscricaoStatus } = useApp()
   const [filter, setFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
 
-  // Dialog state
   const [actionDialog, setActionDialog] = useState<{
     isOpen: boolean
     type: 'APROVAR' | 'CANCELAR'
@@ -59,9 +76,10 @@ export default function AdminDashboard() {
   }>({ isOpen: false, type: 'APROVAR', id: null })
   const [dataAula, setDataAula] = useState('')
 
-  const filteredInscricoes = inscricoes.filter((i) => {
-    const matchText =
-      i.nomeCompleto.toLowerCase().includes(filter.toLowerCase()) || i.cpf.includes(filter)
+  const filteredInscricoes = inscricoes.filter((i: Record<string, unknown>) => {
+    const nome = safeLower(i.nome_completo)
+    const cpf = safeStr(i.cpf)
+    const matchText = nome.includes(filter.toLowerCase()) || cpf.includes(filter)
     const matchStatus = statusFilter === 'ALL' || i.status === statusFilter
     return matchText && matchStatus
   })
@@ -101,7 +119,7 @@ export default function AdminDashboard() {
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium">Total de Inscrições</CardTitle>
-            <UsersIcon className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inscricoes.length}</div>
@@ -114,7 +132,7 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {inscricoes.filter((i) => i.status === 'APROVADA').length}
+              {inscricoes.filter((i: Record<string, unknown>) => i.status === 'APROVADA').length}
             </div>
           </CardContent>
         </Card>
@@ -125,7 +143,18 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {inscricoes.filter((i) => i.status === 'AGUARDANDO').length}
+              {inscricoes.filter((i: Record<string, unknown>) => i.status === 'AGUARDANDO').length}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Em Análise</CardTitle>
+            <XCircle className="h-4 w-4 text-sky-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {inscricoes.filter((i: Record<string, unknown>) => i.status === 'EM_ANALISE').length}
             </div>
           </CardContent>
         </Card>
@@ -156,7 +185,8 @@ export default function AdminDashboard() {
                 <SelectItem value="ALL">Todos os status</SelectItem>
                 <SelectItem value="AGUARDANDO">Aguardando</SelectItem>
                 <SelectItem value="APROVADA">Aprovada</SelectItem>
-                <SelectItem value="LISTA_ESPERA">Lista de Espera</SelectItem>
+                <SelectItem value="EM_ANALISE">Em Análise</SelectItem>
+                <SelectItem value="REPROVADA">Reprovada</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -174,47 +204,59 @@ export default function AdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInscricoes.map((inscricao) => (
-                  <TableRow key={inscricao.id}>
-                    <TableCell className="font-medium">{inscricao.nomeCompleto}</TableCell>
-                    <TableCell>{inscricao.cpf}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {inscricao.turma.replace(/_/g, ' ')}
-                    </TableCell>
-                    <TableCell>{new Date(inscricao.dataCriacao).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <Badge className={statusMap[inscricao.status].color} variant="secondary">
-                        {statusMap[inscricao.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleAction(inscricao.id, 'APROVAR')}>
-                            Aprovar Vaga
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleAction(inscricao.id, 'ESPERA')}>
-                            Lista de Espera
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => handleAction(inscricao.id, 'CANCELAR')}
-                          >
-                            Cancelar Inscrição
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredInscricoes.map((inscricao: Record<string, unknown>) => {
+                  const statusInfo = getStatusInfo(inscricao.status as string | undefined)
+                  const createdDate = inscricao.created
+                  return (
+                    <TableRow key={(inscricao.id as string) || Math.random()}>
+                      <TableCell className="font-medium">
+                        {safeStr(inscricao.nome_completo) || '—'}
+                      </TableCell>
+                      <TableCell>{safeStr(inscricao.cpf) || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {safeStr(inscricao.turma).replace(/_/g, ' ') || '—'}
+                      </TableCell>
+                      <TableCell>
+                        {createdDate ? new Date(createdDate as string).toLocaleDateString() : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusInfo.color} variant="secondary">
+                          {statusInfo.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => handleAction(inscricao.id as string, 'APROVAR')}
+                            >
+                              Aprovar Vaga
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleAction(inscricao.id as string, 'ESPERA')}
+                            >
+                              Lista de Espera
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive"
+                              onClick={() => handleAction(inscricao.id as string, 'CANCELAR')}
+                            >
+                              Cancelar Inscrição
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
                 {filteredInscricoes.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="h-24 text-center">
@@ -268,27 +310,5 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-function UsersIcon(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
   )
 }

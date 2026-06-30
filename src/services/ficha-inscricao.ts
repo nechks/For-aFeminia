@@ -22,6 +22,7 @@ export const createInscricao = async (
 export const updateStatus = async (
   id: string,
   status: StatusInscricao,
+  extraData?: Record<string, unknown>,
 ): Promise<FichaInscricaoFF> => {
-  return await pb.collection('ficha_inscricao_ff').update(id, { status })
+  return await pb.collection('ficha_inscricao_ff').update(id, { status, ...extraData })
 }
