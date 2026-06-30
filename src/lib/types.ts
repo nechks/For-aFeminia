@@ -1,5 +1,11 @@
 export type PerfilUsuario = 'ALUNA_FF' | 'PROFESSOR' | 'ASSISTENTE_SOCIAL' | 'ADMIN' | 'GESTAO'
-export type StatusInscricao = 'AGUARDANDO' | 'APROVADA' | 'REPROVADA' | 'EM_ANALISE'
+export type StatusInscricao =
+  | 'AGUARDANDO'
+  | 'APROVADA'
+  | 'REPROVADA'
+  | 'EM_ANALISE'
+  | 'LISTA_ESPERA'
+  | 'CANCELADA'
 export type TurmaFF =
   | 'CENTRO_VITORIA'
   | 'AEST_SERRA'
@@ -34,6 +40,8 @@ export interface FichaInscricaoFF {
   turma?: string
   status: StatusInscricao
   aceite_lgpd: boolean
+  data_primeira_aula?: string
+  motivo_cancelamento?: string
   created: string
   updated: string
 }

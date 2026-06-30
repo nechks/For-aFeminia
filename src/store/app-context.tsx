@@ -79,10 +79,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateInscricaoStatus = async (
     id: string,
     status: StatusInscricao,
-    _extraData?: Record<string, unknown>,
+    extraData?: Record<string, unknown>,
   ) => {
     try {
-      await updateStatus(id, status)
+      await updateStatus(id, status, extraData)
       await loadInscricoes()
       return { error: null }
     } catch (error) {

@@ -1,161 +1,130 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useApp } from '@/store/app-context'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { useRealtime } from '@/hooks/use-realtime'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+  getInscricoesPaginated,
+  type PaginatedInscricoes,
+} from '@/services/ficha-inscricao'
+import { FichaInscricaoFF, StatusInscricao } from '@/lib/types'
+import { getStatusInfo, turmaLabels, statusInfo } from '@/lib/constants'
+import { InscricaoDetailDialog } from '@/components/admin/InscricaoDetailDialog'
+import { ApprovalDialog, CancellationDialog } from '@/components/admin/ActionDialogs'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  MoreHorizontal,
-  Search,
-  CheckCircle,
-  Clock,
-  XCircle,
-  ListFilter,
-  Users,
-} from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { MoreHorizontal, Search, CheckCircle, Clock, ListChecks, Users, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
-import { StatusInscricao } from '@/lib/types'
 
-const statusMap: Record<StatusInscricao, { label: string; color: string }> = {
-  AGUARDANDO: { label: 'Aguardando', color: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
-  APROVADA: { label: 'Aprovada', color: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100' },
-  REPROVADA: { label: 'Reprovada', color: 'bg-rose-100 text-rose-800 hover:bg-rose-100' },
-  EM_ANALISE: { label: 'Em Análise', color: 'bg-sky-100 text-sky-800 hover:bg-sky-100' },
-}
-
-const getStatusInfo = (status: string | undefined) =>
-  statusMap[status as StatusInscricao] ?? {
-    label: status ?? '—',
-    color: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
-  }
-
-const safeStr = (val: unknown): string => (typeof val === 'string' ? val : '')
-const safeLower = (val: unknown): string => safeStr(val).toLowerCase()
+const PER_PAGE = 10
 
 export default function AdminDashboard() {
-  const { inscricoes, updateInscricaoStatus } = useApp()
-  const [filter, setFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState<string>('ALL')
+  const { inscricoes, updateInscricaoStatus, isAuthenticated } = useApp()
+  const [data, setData] = useState<PaginatedInscricoes | null>(null)
+  const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [turmaFilter, setTurmaFilter] = useState('ALL')
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
 
-  const [actionDialog, setActionDialog] = useState<{
-    isOpen: boolean
-    type: 'APROVAR' | 'REPROVAR'
-    id: string | null
-  }>({ isOpen: false, type: 'APROVAR', id: null })
+  const [detailInscricao, setDetailInscricao] = useState<FichaInscricaoFF | null>(null)
+  const [approvalId, setApprovalId] = useState<string | null>(null)
+  const [cancelId, setCancelId] = useState<string | null>(null)
 
-  const filteredInscricoes = inscricoes.filter((i: Record<string, unknown>) => {
-    const nome = safeLower(i.nome_completo)
-    const cpf = safeStr(i.cpf)
-    const matchText = nome.includes(filter.toLowerCase()) || cpf.includes(filter)
-    const matchStatus = statusFilter === 'ALL' || i.status === statusFilter
-    return matchText && matchStatus
-  })
+  const stats = useMemo(() => ({
+    total: inscricoes.length,
+    aprovadas: inscricoes.filter((i) => i.status === 'APROVADA').length,
+    aguardando: inscricoes.filter((i) => i.status === 'AGUARDANDO').length,
+    listaEspera: inscricoes.filter((i) => i.status === 'LISTA_ESPERA').length,
+  }), [inscricoes])
 
-  const handleAction = (id: string, action: 'APROVAR' | 'ANALISE' | 'REPROVAR') => {
-    if (action === 'ANALISE') {
-      updateInscricaoStatus(id, 'EM_ANALISE')
-      toast({ title: 'Inscrição marcada como em análise' })
-    } else {
-      setActionDialog({ isOpen: true, type: action, id })
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await getInscricoesPaginated({ page, perPage: PER_PAGE, status: statusFilter, turma: turmaFilter, search })
+      setData(result)
+    } catch (err) {
+      console.error('Failed to load inscricoes:', err)
+    } finally {
+      setLoading(false)
     }
+  }, [page, statusFilter, turmaFilter, search])
+
+  useEffect(() => { loadData() }, [loadData])
+  useRealtime('ficha_inscricao_ff', () => { loadData() }, isAuthenticated)
+
+  useEffect(() => {
+    const timer = setTimeout(() => { setPage(1); setSearch(searchInput) }, 350)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const onStatusChange = (v: string) => { setPage(1); setStatusFilter(v) }
+  const onTurmaChange = (v: string) => { setPage(1); setTurmaFilter(v) }
+
+  const handleApprove = async (date: string) => {
+    if (!approvalId) return
+    const { error } = await updateInscricaoStatus(approvalId, 'APROVADA', { data_primeira_aula: date })
+    if (error) { toast({ title: 'Erro ao aprovar', variant: 'destructive' }); return }
+    setApprovalId(null)
+    toast({ title: 'Inscrição Aprovada!', description: 'Aluna notificada.' })
+    loadData()
   }
 
-  const confirmAction = () => {
-    if (actionDialog.id) {
-      if (actionDialog.type === 'APROVAR') {
-        updateInscricaoStatus(actionDialog.id, 'APROVADA')
-        toast({ title: 'Inscrição Aprovada!', description: 'Aluna notificada.' })
-      } else if (actionDialog.type === 'REPROVAR') {
-        updateInscricaoStatus(actionDialog.id, 'REPROVADA')
-        toast({ title: 'Inscrição Reprovada', variant: 'destructive' })
-      }
-    }
-    setActionDialog({ isOpen: false, type: 'APROVAR', id: null })
+  const handleWaitlist = async (id: string) => {
+    const { error } = await updateInscricaoStatus(id, 'LISTA_ESPERA')
+    if (error) { toast({ title: 'Erro', variant: 'destructive' }); return }
+    toast({ title: 'Inscrição movida para Lista de Espera' })
+    loadData()
   }
+
+  const handleAnalyze = async (id: string) => {
+    const { error } = await updateInscricaoStatus(id, 'EM_ANALISE')
+    if (error) { toast({ title: 'Erro', variant: 'destructive' }); return }
+    toast({ title: 'Inscrição marcada como em análise' })
+    loadData()
+  }
+
+  const handleCancel = async (motivo: string) => {
+    if (!cancelId) return
+    const { error } = await updateInscricaoStatus(cancelId, 'CANCELADA', { motivo_cancelamento: motivo })
+    if (error) { toast({ title: 'Erro ao cancelar', variant: 'destructive' }); return }
+    setCancelId(null)
+    toast({ title: 'Inscrição Cancelada', variant: 'destructive' })
+    loadData()
+  }
+
+  const safeStr = (val: unknown): string => (typeof val === 'string' ? val : '')
+  const items = data?.items ?? []
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Gestão de Inscrições</h1>
-        <p className="text-muted-foreground mt-1">
-          Gerencie as alunas do Projeto Força Feminina IV.
-        </p>
+        <p className="text-muted-foreground mt-1">Gerencie as alunas do Projeto Força Feminina IV.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium">Total de Inscrições</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inscricoes.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium">Aprovadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {inscricoes.filter((i: Record<string, unknown>) => i.status === 'APROVADA').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium">Aguardando</CardTitle>
-            <Clock className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {inscricoes.filter((i: Record<string, unknown>) => i.status === 'AGUARDANDO').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium">Em Análise</CardTitle>
-            <XCircle className="h-4 w-4 text-sky-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {inscricoes.filter((i: Record<string, unknown>) => i.status === 'EM_ANALISE').length}
-            </div>
-          </CardContent>
-        </Card>
+        {[
+          { label: 'Total de Inscrições', value: stats.total, icon: Users, color: 'text-muted-foreground' },
+          { label: 'Aprovadas', value: stats.aprovadas, icon: CheckCircle, color: 'text-emerald-500' },
+          { label: 'Aguardando', value: stats.aguardando, icon: Clock, color: 'text-amber-500' },
+          { label: 'Lista de Espera', value: stats.listaEspera, icon: ListChecks, color: 'text-violet-500' },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-sm font-medium">{s.label}</CardTitle>
+              <s.icon className={`h-4 w-4 ${s.color}`} />
+            </CardHeader>
+            <CardContent><div className="text-2xl font-bold">{s.value}</div></CardContent>
+          </Card>
+        ))}
       </div>
 
       <Card>
@@ -167,24 +136,24 @@ export default function AdminDashboard() {
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome ou CPF..."
-                className="pl-9 bg-background"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              />
+              <Input placeholder="Buscar por nome ou CPF..." className="pl-9 bg-background" value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]">
-                <ListFilter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+            <Select value={statusFilter} onValueChange={onStatusChange}>
+              <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Todos os status</SelectItem>
-                <SelectItem value="AGUARDANDO">Aguardando</SelectItem>
-                <SelectItem value="APROVADA">Aprovada</SelectItem>
-                <SelectItem value="EM_ANALISE">Em Análise</SelectItem>
-                <SelectItem value="REPROVADA">Reprovada</SelectItem>
+                {Object.entries(statusInfo).map(([key, info]) => (
+                  <SelectItem key={key} value={key}>{info.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={turmaFilter} onValueChange={onTurmaChange}>
+              <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="Turma" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todas as turmas</SelectItem>
+                {Object.entries(turmaLabels).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -202,104 +171,66 @@ export default function AdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInscricoes.map((inscricao: Record<string, unknown>) => {
-                  const statusInfo = getStatusInfo(inscricao.status as string | undefined)
-                  const createdDate = inscricao.created
-                  return (
-                    <TableRow key={(inscricao.id as string) || Math.random()}>
-                      <TableCell className="font-medium">
-                        {safeStr(inscricao.nome_completo) || '—'}
-                      </TableCell>
-                      <TableCell>{safeStr(inscricao.cpf) || '—'}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {safeStr(inscricao.turma).replace(/_/g, ' ') || '—'}
-                      </TableCell>
-                      <TableCell>
-                        {createdDate ? new Date(createdDate as string).toLocaleDateString() : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={statusInfo.color} variant="secondary">
-                          {statusInfo.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <span className="sr-only">Open menu</span>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                            <DropdownMenuItem
-                              onClick={() => handleAction(inscricao.id as string, 'APROVAR')}
-                            >
-                              Aprovar Vaga
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleAction(inscricao.id as string, 'ANALISE')}
-                            >
-                              Marcar em Análise
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => handleAction(inscricao.id as string, 'REPROVAR')}
-                            >
-                              Reprovar Inscrição
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-                {filteredInscricoes.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
-                      Nenhum registro encontrado.
-                    </TableCell>
-                  </TableRow>
+                {loading ? (
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                ) : items.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center">Nenhum registro encontrado.</TableCell></TableRow>
+                ) : (
+                  items.map((inscricao) => {
+                    const status = getStatusInfo(inscricao.status)
+                    const created = inscricao.created ? new Date(inscricao.created).toLocaleDateString('pt-BR') : '—'
+                    return (
+                      <TableRow key={inscricao.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setDetailInscricao(inscricao)}>
+                        <TableCell className="font-medium">{safeStr(inscricao.nome_completo) || '—'}</TableCell>
+                        <TableCell>{safeStr(inscricao.cpf) || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{turmaLabels[inscricao.turma ?? ''] ?? safeStr(inscricao.turma) || '—'}</TableCell>
+                        <TableCell>{created}</TableCell>
+                        <TableCell><Badge className={status.color} variant="secondary">{status.label}</Badge></TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0"><span className="sr-only">Open menu</span><MoreHorizontal className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => setDetailInscricao(inscricao)}>Ver Detalhes</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setApprovalId(inscricao.id)}>Aprovar Vaga</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleAnalyze(inscricao.id)}>Marcar em Análise</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleWaitlist(inscricao.id)}>Lista de Espera</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onClick={() => setCancelId(inscricao.id)}>Cancelar Inscrição</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
+
+          {!loading && data && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-muted-foreground">
+                Página {data.page} de {data.totalPages} ({data.totalItems} registros)
+              </span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                  <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                </Button>
+                <Button variant="outline" size="sm" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>
+                  Próximo <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Dialog
-        open={actionDialog.isOpen}
-        onOpenChange={(open) => !open && setActionDialog({ ...actionDialog, isOpen: false })}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {actionDialog.type === 'APROVAR' ? 'Aprovar Inscrição' : 'Reprovar Inscrição'}
-            </DialogTitle>
-            <DialogDescription>
-              {actionDialog.type === 'APROVAR'
-                ? 'Confirme a aprovação da inscrição. A aluna será notificada.'
-                : 'Tem certeza que deseja reprovar esta inscrição?'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setActionDialog({ ...actionDialog, isOpen: false })}
-            >
-              Voltar
-            </Button>
-            <Button
-              variant={actionDialog.type === 'REPROVAR' ? 'destructive' : 'default'}
-              onClick={confirmAction}
-            >
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InscricaoDetailDialog inscricao={detailInscricao} open={!!detailInscricao} onOpenChange={(open) => !open && setDetailInscricao(null)} />
+      <ApprovalDialog open={!!approvalId} onOpenChange={(open) => !open && setApprovalId(null)} onConfirm={handleApprove} />
+      <CancellationDialog open={!!cancelId} onOpenChange={(open) => !open && setCancelId(null)} onConfirm={handleCancel} />
     </div>
   )
 }
