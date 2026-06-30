@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AuthProvider } from '@/hooks/use-auth'
 import { AppProvider, useApp } from '@/store/app-context'
 import Index from './pages/Index'
 import NotFound from './pages/NotFound'
@@ -76,13 +77,15 @@ const AppRoutes = () => (
 
 const App = () => (
   <BrowserRouter>
-    <AppProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <AppRoutes />
-      </TooltipProvider>
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <AppRoutes />
+        </TooltipProvider>
+      </AppProvider>
+    </AuthProvider>
   </BrowserRouter>
 )
 
