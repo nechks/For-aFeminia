@@ -2,10 +2,6 @@ migrate(
   (app) => {
     const col = app.findCollectionByNameOrId('ficha_inscricao_ff')
 
-    const statusField = col.fields.getByName('status')
-    if (statusField) {
-      col.fields.remove(statusField)
-    }
     col.fields.add(
       new SelectField({
         name: 'status',
@@ -28,10 +24,6 @@ migrate(
   (app) => {
     const col = app.findCollectionByNameOrId('ficha_inscricao_ff')
 
-    const statusField = col.fields.getByName('status')
-    if (statusField) {
-      col.fields.remove(statusField)
-    }
     col.fields.add(
       new SelectField({
         name: 'status',
@@ -41,11 +33,13 @@ migrate(
       }),
     )
 
-    const dataField = col.fields.getByName('data_primeira_aula')
-    if (dataField) col.fields.remove(dataField)
+    if (col.fields.getByName('data_primeira_aula')) {
+      col.fields.removeByName('data_primeira_aula')
+    }
 
-    const motivoField = col.fields.getByName('motivo_cancelamento')
-    if (motivoField) col.fields.remove(motivoField)
+    if (col.fields.getByName('motivo_cancelamento')) {
+      col.fields.removeByName('motivo_cancelamento')
+    }
 
     app.save(col)
   },
