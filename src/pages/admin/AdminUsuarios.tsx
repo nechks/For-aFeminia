@@ -49,7 +49,6 @@ import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { updateUserTurma } from '@/services/usuarios'
-import { Pencil, Check } from 'lucide-react'
 
 // ─── Configuração dos perfis ───────────────────────────────────────────────────
 
