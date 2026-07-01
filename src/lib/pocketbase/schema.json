@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-01T14:32:22.381Z",
+  "generatedAt": "2026-07-01T15:00:22.343Z",
   "collections": [
     {
       "name": "users",
@@ -56,6 +56,12 @@
             "ADMINISTRATIVO",
             "GESTAO_GERAL"
           ]
+        },
+        {
+          "name": "turma",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -196,7 +202,8 @@
       ],
       "indexes": [
         "CREATE INDEX idx_ficha_user_id ON ficha_inscricao_ff (user_id)",
-        "CREATE INDEX idx_ficha_cpf ON ficha_inscricao_ff (cpf)"
+        "CREATE INDEX idx_ficha_cpf ON ficha_inscricao_ff (cpf)",
+        "CREATE INDEX `idx_ficha_turma` ON `ficha_inscricao_ff` (turma)"
       ]
     },
     {
@@ -572,7 +579,8 @@
       ],
       "indexes": [
         "CREATE INDEX idx_atendimentos_profissional ON atendimentos (profissional_id)",
-        "CREATE INDEX idx_atendimentos_aluna ON atendimentos (aluna_id)"
+        "CREATE INDEX idx_atendimentos_aluna ON atendimentos (aluna_id)",
+        "CREATE INDEX `idx_atendimentos_turma` ON `atendimentos` (turma)"
       ]
     }
   ]

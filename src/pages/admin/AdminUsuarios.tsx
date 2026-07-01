@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '@/store/app-context'
-import { PerfilUsuario, Usuario } from '@/lib/types'
+import { PerfilUsuario, Usuario, FichaInscricaoFF } from '@/lib/types'
 import pb from '@/lib/pocketbase/client'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -102,7 +102,22 @@ async function listUsers(perfil: PerfilUsuario): Promise<Usuario[]> {
     filter: `perfil = "${perfil}"`,
     sort: 'name',
   })
-  return records as unknown as Usuario[]
+  const users = records as unknown as Usuario[]
+
+  if (perfil === 'ALUNA_FF' && users.length > 0) {
+    const fichas = (await pb
+      .collection('ficha_inscricao_ff')
+      .getFullList()) as unknown as FichaInscricaoFF[]
+    const turmaMap: Record<string, string> = {}
+    for (const f of fichas) {
+      if (f.user_id && f.turma) {
+        turmaMap[f.user_id] = f.turma
+      }
+    }
+    return users.map((u) => ({ ...u, turma: turmaMap[u.id] || u.turma }))
+  }
+
+  return users
 }
 
 function UserTable({
@@ -128,19 +143,20 @@ function UserTable({
             <TableHead>Nome</TableHead>
             <TableHead>E-mail</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead>Turma</TableHead>
             <TableHead>Desde</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center">
+              <TableCell colSpan={5} className="h-24 text-center">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
               </TableCell>
             </TableRow>
           ) : filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                 Nenhum usuário encontrado.
               </TableCell>
             </TableRow>
@@ -165,6 +181,9 @@ function UserTable({
                       Inativo
                     </Badge>
                   )}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {u.turma ? (turmaLabels[u.turma] ?? u.turma) : 'N/A'}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {u.created ? new Date(u.created).toLocaleDateString('pt-BR') : '—'}
