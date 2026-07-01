@@ -110,22 +110,19 @@ export interface CalendarioAula {
   updated: string
 }
 
-export type TipoAcessoAtendimento = 'PUBLICO' | 'CONFIDENCIAL'
-
 export interface Atendimento {
   id: string
-  created_by: string
   aluna_id: string
-  data: string
-  horario: string
-  tipo_acesso: TipoAcessoAtendimento
-  relatorio: string
+  profissional_id: string
   turma: string
+  data_atendimento: string
+  descricao: string
+  encaminhamento?: string
   created: string
   updated: string
   expand?: {
-    created_by?: Usuario
     aluna_id?: Usuario
+    profissional_id?: Usuario
   }
 }
 

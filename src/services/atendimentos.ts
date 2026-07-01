@@ -1,5 +1,5 @@
 import pb from '@/lib/pocketbase/client'
-import { Atendimento, FichaInscricaoFF, TipoAcessoAtendimento } from '@/lib/types'
+import { Atendimento, FichaInscricaoFF } from '@/lib/types'
 
 export interface AlunaOpcao {
   userId: string
@@ -8,12 +8,11 @@ export interface AlunaOpcao {
 }
 
 export interface CriarAtendimentoData {
-  data: string
-  horario: string
-  tipo_acesso: TipoAcessoAtendimento
-  relatorio: string
-  turma: string
   aluna_id: string
+  turma: string
+  data_atendimento: string
+  descricao: string
+  encaminhamento?: string
 }
 
 export const getAlunasPorTurma = async (turma: string): Promise<AlunaOpcao[]> => {
@@ -31,18 +30,18 @@ export const getAlunasPorTurma = async (turma: string): Promise<AlunaOpcao[]> =>
 
 export const getAtendimentos = async (): Promise<Atendimento[]> => {
   return pb.collection('atendimentos').getFullList({
-    sort: '-data,-horario',
-    expand: 'created_by,aluna_id',
+    sort: '-data_atendimento',
+    expand: 'aluna_id,profissional_id',
   }) as unknown as Atendimento[]
 }
 
 export const criarAtendimento = async (
-  userId: string,
+  profissionalId: string,
   data: CriarAtendimentoData,
 ): Promise<Atendimento> => {
   return pb.collection('atendimentos').create({
     ...data,
-    created_by: userId,
+    profissional_id: profissionalId,
   }) as unknown as Atendimento
 }
 
