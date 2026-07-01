@@ -84,7 +84,12 @@ export default function DashboardAluna() {
         </Avatar>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Olá, {user?.nomeSocial?.split(' ')[0] ?? dashboard?.nome?.split(' ')[0] ?? user?.name?.split(' ')[0] ?? 'Aluna'}!
+            Olá,{' '}
+            {user?.nomeSocial?.split(' ')[0] ??
+              dashboard?.nome?.split(' ')[0] ??
+              user?.name?.split(' ')[0] ??
+              'Aluna'}
+            !
           </h1>
           <p className="text-muted-foreground mt-1">
             Bem-vinda ao seu painel do Projeto Força Feminina.

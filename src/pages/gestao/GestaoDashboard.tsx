@@ -4,8 +4,28 @@ import { getResumoChamadas, type ResumoChamadas } from '@/services/chamadas-resu
 import { useRealtime } from '@/hooks/use-realtime'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts'
-import { Users, TrendingDown, FileText, AlertCircle, Loader2, CalendarDays, UserCheck, UserX } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  Tooltip,
+} from 'recharts'
+import {
+  Users,
+  TrendingDown,
+  FileText,
+  AlertCircle,
+  Loader2,
+  CalendarDays,
+  UserCheck,
+  UserX,
+} from 'lucide-react'
 import { turmaLabels, statusInfo } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
 
@@ -141,7 +161,9 @@ export default function GestaoDashboard() {
               <UserCheck className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-emerald-600">{chamadas?.totalPresencas ?? '—'}</div>
+              <div className="text-2xl font-bold text-emerald-600">
+                {chamadas?.totalPresencas ?? '—'}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -163,12 +185,18 @@ export default function GestaoDashboard() {
             </CardHeader>
             <CardContent>
               <ChartContainer
-                config={{ Presentes: { label: 'Presentes', color: '#10b981' }, Faltas: { label: 'Faltas', color: '#f43f5e' } }}
+                config={{
+                  Presentes: { label: 'Presentes', color: '#10b981' },
+                  Faltas: { label: 'Faltas', color: '#f43f5e' },
+                }}
                 className="h-[220px] w-full"
               >
                 <BarChart
                   data={chamadas.ultimasAulas.map((a) => ({
-                    data: new Date(a.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+                    data: new Date(a.data).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                    }),
                     Presentes: a.presentes,
                     Faltas: a.ausentes,
                   }))}

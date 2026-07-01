@@ -17,10 +17,10 @@ export interface CriarAtendimentoData {
 }
 
 export const getAlunasPorTurma = async (turma: string): Promise<AlunaOpcao[]> => {
-  const fichas = await pb.collection('ficha_inscricao_ff').getFullList({
+  const fichas = (await pb.collection('ficha_inscricao_ff').getFullList({
     filter: `turma = "${turma}" && status = "APROVADA"`,
     sort: 'nome_completo',
-  }) as unknown as FichaInscricaoFF[]
+  })) as unknown as FichaInscricaoFF[]
 
   return fichas.map((f) => ({
     userId: f.user_id,

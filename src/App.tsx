@@ -99,7 +99,15 @@ const AppRoutes = () => (
       <Route
         path="/aluna/perfil"
         element={
-          <ProtectedRoute allowedRoles={['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+          <ProtectedRoute
+            allowedRoles={[
+              'ALUNA_FF',
+              'PROFESSOR',
+              'ADMINISTRATIVO',
+              'ASSISTENTE_SOCIAL',
+              'GESTAO_GERAL',
+            ]}
+          >
             <PerfilAluna />
           </ProtectedRoute>
         }
@@ -132,7 +140,9 @@ const AppRoutes = () => (
       <Route
         path="/atendimentos"
         element={
-          <ProtectedRoute allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+          <ProtectedRoute
+            allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}
+          >
             <Atendimentos />
           </ProtectedRoute>
         }

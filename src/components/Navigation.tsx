@@ -55,7 +55,12 @@ const navItems: NavItem[] = [
     roles: ['GESTAO_GERAL'],
   },
   { title: 'Meu Painel', href: '/aluna/dashboard', icon: LayoutDashboard, roles: ['ALUNA_FF'] },
-  { title: 'Meu Perfil', href: '/aluna/perfil', icon: CircleUser, roles: ['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL'] },
+  {
+    title: 'Meu Perfil',
+    href: '/aluna/perfil',
+    icon: CircleUser,
+    roles: ['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL'],
+  },
   { title: 'Ficha de Confirmação', href: '/aluna/ficha', icon: FileText, roles: ['ALUNA_FF'] },
   { title: 'Calendário', href: '/aluna/calendario', icon: Calendar, roles: ['ALUNA_FF'] },
   { title: 'Chamada', href: '/professor/chamada', icon: UserCheck, roles: ['PROFESSOR'] },

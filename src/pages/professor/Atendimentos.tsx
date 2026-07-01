@@ -103,15 +103,21 @@ function DetalheDialog({
             )}
           </div>
           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <span><strong>Aluna:</strong> {alunaName}</span>
-            <span><strong>Registrado por:</strong> {autor}</span>
+            <span>
+              <strong>Aluna:</strong> {alunaName}
+            </span>
+            <span>
+              <strong>Registrado por:</strong> {autor}
+            </span>
           </div>
           <div className="rounded-md bg-muted/50 border p-4 text-sm whitespace-pre-wrap leading-relaxed">
             {atendimento.relatorio}
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
+          <Button variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -213,7 +219,9 @@ function NovoAtendimentoDialog({
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(turmaLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
+                  <SelectItem key={k} value={k}>
+                    {v}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -233,7 +241,9 @@ function NovoAtendimentoDialog({
                     <Loader2 className="h-3 w-3 animate-spin" /> Carregando...
                   </span>
                 ) : (
-                  <SelectValue placeholder={form.turma ? 'Selecione a aluna...' : 'Selecione a turma primeiro'} />
+                  <SelectValue
+                    placeholder={form.turma ? 'Selecione a aluna...' : 'Selecione a turma primeiro'}
+                  />
                 )}
               </SelectTrigger>
               <SelectContent>
@@ -329,9 +339,17 @@ export default function Atendimentos() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+  }, [load])
 
-  useRealtime('atendimentos', () => { load() }, isAuthenticated)
+  useRealtime(
+    'atendimentos',
+    () => {
+      load()
+    },
+    isAuthenticated,
+  )
 
   const handleDeletar = async () => {
     if (!deletarId) return
@@ -347,9 +365,7 @@ export default function Atendimentos() {
 
   const ehMeuRegistro = (a: Atendimento) => a.created_by === user?.id
   const podeExcluir = (a: Atendimento) =>
-    ehMeuRegistro(a) ||
-    user?.perfil === 'ADMINISTRATIVO' ||
-    user?.perfil === 'GESTAO_GERAL'
+    ehMeuRegistro(a) || user?.perfil === 'ADMINISTRATIVO' || user?.perfil === 'GESTAO_GERAL'
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -410,14 +426,21 @@ export default function Atendimentos() {
                           }
                         >
                           {isConfidencial ? (
-                            <><Lock className="h-3 w-3 mr-1" /> Confidencial</>
+                            <>
+                              <Lock className="h-3 w-3 mr-1" /> Confidencial
+                            </>
                           ) : (
-                            <><Globe className="h-3 w-3 mr-1" /> Público</>
+                            <>
+                              <Globe className="h-3 w-3 mr-1" /> Público
+                            </>
                           )}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">{turmaLabel}</Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {turmaLabel}
+                        </Badge>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR')} às {a.horario}
+                          {new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR')} às{' '}
+                          {a.horario}
                         </span>
                         <span className="text-xs text-muted-foreground">· por {autor}</span>
                       </div>
@@ -464,11 +487,7 @@ export default function Atendimentos() {
         </CardContent>
       </Card>
 
-      <NovoAtendimentoDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSuccess={load}
-      />
+      <NovoAtendimentoDialog open={dialogOpen} onOpenChange={setDialogOpen} onSuccess={load} />
 
       <DetalheDialog atendimento={detalhe} onClose={() => setDetalhe(null)} />
 
@@ -476,9 +495,7 @@ export default function Atendimentos() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir atendimento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>

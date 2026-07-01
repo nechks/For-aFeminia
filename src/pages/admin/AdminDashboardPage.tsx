@@ -13,7 +13,17 @@ import {
   Pie,
   Legend,
 } from 'recharts'
-import { CheckCircle, Clock, ListChecks, Users, XCircle, Search, UserCheck, UserX, CalendarDays } from 'lucide-react'
+import {
+  CheckCircle,
+  Clock,
+  ListChecks,
+  Users,
+  XCircle,
+  Search,
+  UserCheck,
+  UserX,
+  CalendarDays,
+} from 'lucide-react'
 import { turmaLabels } from '@/lib/constants'
 import { getResumoChamadas, type ResumoChamadas } from '@/services/chamadas-resumo'
 
@@ -47,7 +57,9 @@ export default function AdminDashboardPage() {
     }
   }, [])
 
-  useEffect(() => { loadChamadas() }, [loadChamadas])
+  useEffect(() => {
+    loadChamadas()
+  }, [loadChamadas])
 
   const stats = useMemo(
     () => ({
@@ -83,11 +95,21 @@ export default function AdminDashboardPage() {
   )
 
   const summaryCards = [
-    { label: 'Total de Inscrições', value: stats.total, icon: Users, color: 'text-muted-foreground' },
+    {
+      label: 'Total de Inscrições',
+      value: stats.total,
+      icon: Users,
+      color: 'text-muted-foreground',
+    },
     { label: 'Aprovadas', value: stats.aprovadas, icon: CheckCircle, color: 'text-emerald-500' },
     { label: 'Aguardando', value: stats.aguardando, icon: Clock, color: 'text-amber-500' },
     { label: 'Em Análise', value: stats.emAnalise, icon: Search, color: 'text-sky-500' },
-    { label: 'Lista de Espera', value: stats.listaEspera, icon: ListChecks, color: 'text-violet-500' },
+    {
+      label: 'Lista de Espera',
+      value: stats.listaEspera,
+      icon: ListChecks,
+      color: 'text-violet-500',
+    },
     { label: 'Canceladas', value: stats.canceladas, icon: XCircle, color: 'text-rose-500' },
   ]
 
@@ -95,9 +117,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Visão geral do Projeto Força Feminina IV.
-        </p>
+        <p className="text-muted-foreground mt-1">Visão geral do Projeto Força Feminina IV.</p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -135,7 +155,9 @@ export default function AdminDashboardPage() {
               <UserCheck className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-emerald-600">{chamadas?.totalPresencas ?? '—'}</div>
+              <div className="text-2xl font-bold text-emerald-600">
+                {chamadas?.totalPresencas ?? '—'}
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -159,7 +181,10 @@ export default function AdminDashboardPage() {
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart
                   data={chamadas.ultimasAulas.map((a) => ({
-                    data: new Date(a.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+                    data: new Date(a.data).toLocaleDateString('pt-BR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                    }),
                     Presentes: a.presentes,
                     Faltas: a.ausentes,
                   }))}
@@ -199,9 +224,7 @@ export default function AdminDashboardPage() {
                     cx="50%"
                     cy="50%"
                     outerRadius={90}
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     labelLine={false}
                   >
                     {statusChartData.map((entry) => (
@@ -228,7 +251,10 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={turmaChartData} margin={{ top: 4, right: 8, left: -16, bottom: 40 }}>
+                <BarChart
+                  data={turmaChartData}
+                  margin={{ top: 4, right: 8, left: -16, bottom: 40 }}
+                >
                   <XAxis
                     dataKey="name"
                     tick={{ fontSize: 11 }}
@@ -238,7 +264,12 @@ export default function AdminDashboardPage() {
                   />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="total" name="Inscrições" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="total"
+                    name="Inscrições"
+                    fill="hsl(var(--primary))"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}

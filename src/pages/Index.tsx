@@ -8,24 +8,26 @@ import { Shield } from 'lucide-react'
 import { getErrorMessage } from '@/lib/pocketbase/errors'
 
 export default function Index() {
-  const { user, isAuthenticated, authLoading, login } = useApp()
+  const { user, isAuthenticated, authLoading, login, signUp } = useApp()
   const navigate = useNavigate()
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      if (user.perfil === 'ALUNA_FF') {
+      if (
+        user.perfil === 'ADMINISTRATIVO' ||
+        user.perfil === 'GESTAO_GERAL' ||
+        user.perfil === 'ASSISTENTE_SOCIAL'
+      ) {
+        navigate('/admin/inscricoes')
+      } else if (user.perfil === 'ALUNA_FF') {
         navigate('/aluna/dashboard')
       } else if (user.perfil === 'PROFESSOR') {
         navigate('/professor/chamada')
-      } else if (user.perfil === 'GESTAO_GERAL') {
-        navigate('/gestao/dashboard')
-      } else if (user.perfil === 'ADMINISTRATIVO') {
-        navigate('/admin/dashboard')
-      } else if (user.perfil === 'ASSISTENTE_SOCIAL') {
-        navigate('/admin/inscricoes')
       }
     }
   }, [isAuthenticated, user, navigate])
@@ -41,7 +43,8 @@ export default function Index() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const result = await login(email, password)
+    const result =
+      mode === 'login' ? await login(email, password) : await signUp(name, email, password)
     if (result.error) {
       setError(getErrorMessage(result.error))
     }
@@ -82,13 +85,29 @@ export default function Index() {
       <div className="w-full md:w-[450px] flex items-center justify-center p-8 bg-card shadow-[-20px_0_30px_-15px_rgba(0,0,0,0.1)] z-10 relative">
         <Card className="w-full border-none shadow-none">
           <CardHeader className="px-0">
-            <CardTitle className="text-2xl font-bold">Acessar Sistema</CardTitle>
+            <CardTitle className="text-2xl font-bold">
+              {mode === 'login' ? 'Acessar Sistema' : 'Criar Conta'}
+            </CardTitle>
             <CardDescription>
-              Faça login para acompanhar sua inscrição ou gerenciar o projeto.
+              {mode === 'login'
+                ? 'Faça login para acompanhar sua inscrição ou gerenciar o projeto.'
+                : 'Crie sua conta para se inscrever no projeto.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-0">
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'signup' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Nome Completo</label>
+                  <Input
+                    placeholder="Maria da Silva"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="h-12"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <label className="text-sm font-medium">E-mail</label>
                 <Input
@@ -113,14 +132,48 @@ export default function Index() {
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full h-12 text-md mt-4">
-                Entrar
+                {mode === 'login' ? 'Entrar' : 'Criar Conta'}
               </Button>
             </form>
-            <div className="mt-4 text-xs text-muted-foreground font-mono bg-muted p-3 rounded">
-              <p className="font-semibold mb-1">Contas de teste (senha: Skip@Pass):</p>
-              <p>andiaracaneo10@gmail.com — Admin</p>
-              <p>prof@atkdgv.com — Professor</p>
-              <p>aluna1@teste.com — Aluna</p>
+            <div className="mt-6 text-center text-sm text-muted-foreground">
+              {mode === 'login' ? (
+                <p>
+                  Não tem conta?{' '}
+                  <button
+                    onClick={() => {
+                      setMode('signup')
+                      setError('')
+                    }}
+                    className="text-primary font-medium hover:underline"
+                  >
+                    Criar conta
+                  </button>
+                </p>
+              ) : (
+                <p>
+                  Já tem conta?{' '}
+                  <button
+                    onClick={() => {
+                      setMode('login')
+                      setError('')
+                    }}
+                    className="text-primary font-medium hover:underline"
+                  >
+                    Fazer login
+                  </button>
+                </p>
+              )}
+            </div>
+            <div className="mt-4 text-center text-xs text-muted-foreground">
+              <p className="font-mono bg-muted p-2 rounded text-left">
+                Contas de teste (senha: Skip@Pass):
+                <br />
+                andiaracaneo10@gmail.com (Admin)
+                <br />
+                prof@atkdgv.com (Professor)
+                <br />
+                aluna1@teste.com (Aluna)
+              </p>
             </div>
           </CardContent>
         </Card>

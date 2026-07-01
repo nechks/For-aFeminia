@@ -31,7 +31,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { UserPlus, Loader2, Search, GraduationCap, Users, ShieldCheck, HeartHandshake, BarChart3, MapPin } from 'lucide-react'
+import {
+  UserPlus,
+  Loader2,
+  Search,
+  GraduationCap,
+  Users,
+  ShieldCheck,
+  HeartHandshake,
+  BarChart3,
+  MapPin,
+} from 'lucide-react'
 import { turmaLabels } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
 
@@ -77,7 +87,13 @@ const PERFIS: Record<PerfilUsuario, PerfilConfig> = {
   },
 }
 
-const TABS: PerfilUsuario[] = ['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']
+const TABS: PerfilUsuario[] = [
+  'ALUNA_FF',
+  'PROFESSOR',
+  'ADMINISTRATIVO',
+  'ASSISTENTE_SOCIAL',
+  'GESTAO_GERAL',
+]
 
 // ─── Listagem ──────────────────────────────────────────────────────────────────
 
@@ -89,7 +105,15 @@ async function listUsers(perfil: PerfilUsuario): Promise<Usuario[]> {
   return records as unknown as Usuario[]
 }
 
-function UserTable({ users, loading, search }: { users: Usuario[]; loading: boolean; search: string }) {
+function UserTable({
+  users,
+  loading,
+  search,
+}: {
+  users: Usuario[]
+  loading: boolean
+  search: string
+}) {
   const filtered = users.filter(
     (u) =>
       u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -127,11 +151,17 @@ function UserTable({ users, loading, search }: { users: Usuario[]; loading: bool
                 <TableCell>{u.email}</TableCell>
                 <TableCell>
                   {u.ativo ? (
-                    <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100" variant="secondary">
+                    <Badge
+                      className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                      variant="secondary"
+                    >
                       Ativo
                     </Badge>
                   ) : (
-                    <Badge className="bg-gray-200 text-gray-600 hover:bg-gray-200" variant="secondary">
+                    <Badge
+                      className="bg-gray-200 text-gray-600 hover:bg-gray-200"
+                      variant="secondary"
+                    >
                       Inativo
                     </Badge>
                   )}
@@ -244,7 +274,9 @@ function NovoUsuarioDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(turmaLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                    <SelectItem key={key} value={key}>
+                      {label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -318,7 +350,9 @@ function UserTab({ perfil, onRefresh }: { perfil: PerfilUsuario; onRefresh?: () 
     }
   }, [perfil])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+  }, [load])
 
   return (
     <div className="space-y-4">

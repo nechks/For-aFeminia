@@ -25,14 +25,20 @@ export async function getResumoChamadas(): Promise<ResumoChamadas> {
   })
 
   if (registros.length === 0) {
-    return { totalAulas: 0, totalPresencas: 0, totalFaltas: 0, percentualGeral: 0, porTurma: [], ultimasAulas: [] }
+    return {
+      totalAulas: 0,
+      totalPresencas: 0,
+      totalFaltas: 0,
+      percentualGeral: 0,
+      porTurma: [],
+      ultimasAulas: [],
+    }
   }
 
   const totalPresencas = registros.filter((r) => r.presente).length
   const totalFaltas = registros.filter((r) => !r.presente).length
-  const percentualGeral = registros.length > 0
-    ? Math.round((totalPresencas / registros.length) * 100)
-    : 0
+  const percentualGeral =
+    registros.length > 0 ? Math.round((totalPresencas / registros.length) * 100) : 0
 
   // Últimas 5 datas únicas de aula
   const datasUnicas = [...new Set(registros.map((r) => r.data_aula))].slice(0, 5)

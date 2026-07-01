@@ -33,13 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  MoreHorizontal,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-} from 'lucide-react'
+import { MoreHorizontal, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 
 const PER_PAGE = 10
@@ -80,7 +74,13 @@ export default function AdminInscricoes() {
     loadData()
   }, [loadData])
 
-  useRealtime('ficha_inscricao_ff', () => { loadData() }, isAuthenticated)
+  useRealtime(
+    'ficha_inscricao_ff',
+    () => {
+      loadData()
+    },
+    isAuthenticated,
+  )
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -90,15 +90,24 @@ export default function AdminInscricoes() {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  const onStatusChange = (v: string) => { setPage(1); setStatusFilter(v) }
-  const onTurmaChange = (v: string) => { setPage(1); setTurmaFilter(v) }
+  const onStatusChange = (v: string) => {
+    setPage(1)
+    setStatusFilter(v)
+  }
+  const onTurmaChange = (v: string) => {
+    setPage(1)
+    setTurmaFilter(v)
+  }
 
   const handleApprove = async (date: string) => {
     if (!approvalId) return
     const { error } = await updateInscricaoStatus(approvalId, 'APROVADA', {
       data_primeira_aula: date,
     })
-    if (error) { toast({ title: 'Erro ao aprovar', variant: 'destructive' }); return }
+    if (error) {
+      toast({ title: 'Erro ao aprovar', variant: 'destructive' })
+      return
+    }
     setApprovalId(null)
     toast({ title: 'Inscrição Aprovada!', description: 'Aluna notificada.' })
     loadData()
@@ -106,14 +115,20 @@ export default function AdminInscricoes() {
 
   const handleWaitlist = async (id: string) => {
     const { error } = await updateInscricaoStatus(id, 'LISTA_ESPERA')
-    if (error) { toast({ title: 'Erro', variant: 'destructive' }); return }
+    if (error) {
+      toast({ title: 'Erro', variant: 'destructive' })
+      return
+    }
     toast({ title: 'Inscrição movida para Lista de Espera' })
     loadData()
   }
 
   const handleAnalyze = async (id: string) => {
     const { error } = await updateInscricaoStatus(id, 'EM_ANALISE')
-    if (error) { toast({ title: 'Erro', variant: 'destructive' }); return }
+    if (error) {
+      toast({ title: 'Erro', variant: 'destructive' })
+      return
+    }
     toast({ title: 'Inscrição marcada como em análise' })
     loadData()
   }
@@ -123,7 +138,10 @@ export default function AdminInscricoes() {
     const { error } = await updateInscricaoStatus(cancelId, 'CANCELADA', {
       motivo_cancelamento: motivo,
     })
-    if (error) { toast({ title: 'Erro ao cancelar', variant: 'destructive' }); return }
+    if (error) {
+      toast({ title: 'Erro ao cancelar', variant: 'destructive' })
+      return
+    }
     setCancelId(null)
     toast({ title: 'Inscrição Cancelada', variant: 'destructive' })
     loadData()
@@ -164,7 +182,9 @@ export default function AdminInscricoes() {
               <SelectContent>
                 <SelectItem value="ALL">Todos os status</SelectItem>
                 {Object.entries(statusInfo).map(([key, info]) => (
-                  <SelectItem key={key} value={key}>{info.label}</SelectItem>
+                  <SelectItem key={key} value={key}>
+                    {info.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -175,7 +195,9 @@ export default function AdminInscricoes() {
               <SelectContent>
                 <SelectItem value="ALL">Todas as turmas</SelectItem>
                 {Object.entries(turmaLabels).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                  <SelectItem key={key} value={key}>
+                    {label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

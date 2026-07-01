@@ -113,8 +113,7 @@ export default function PerfilAluna() {
 
             <div className="space-y-1.5">
               <Label htmlFor="nomeSocial">
-                Nome social{' '}
-                <span className="text-muted-foreground font-normal">(opcional)</span>
+                Nome social <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
               <Input
                 id="nomeSocial"
