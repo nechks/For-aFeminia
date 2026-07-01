@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-01T15:05:51.903Z",
+  "generatedAt": "2026-07-01T15:11:48.854Z",
   "collections": [
     {
       "name": "users",
@@ -8,7 +8,7 @@
         "list": "@request.auth.id = id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
         "view": "@request.auth.id = id || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
         "create": "",
-        "update": "id = @request.auth.id || @request.auth.perfil = \"ADMINISTRATIVO\"",
+        "update": "id = @request.auth.id || @request.auth.perfil = 'ADMINISTRATIVO' || @request.auth.perfil = 'GESTAO_GERAL'",
         "delete": "id = @request.auth.id"
       },
       "fields": [

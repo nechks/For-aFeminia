@@ -125,7 +125,7 @@ async function listUsers(perfil: PerfilUsuario): Promise<Usuario[]> {
   return users
 }
 
-function UserTurmaCell({ user, onUpdated }: { user: Usuario; onUpdated: () => void }) {
+function UserTurmaCell({ user, onUpdated }: { user: Usuario; onUpdated: (user: Usuario) => void }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const currentLabel = user.turma ? (turmaLabels[user.turma] ?? user.turma) : 'N/A'
@@ -137,9 +137,9 @@ function UserTurmaCell({ user, onUpdated }: { user: Usuario; onUpdated: () => vo
     }
     setLoading(true)
     try {
-      await updateUserTurma(user.id, turma)
+      const updatedUser = await updateUserTurma(user.id, turma)
       toast({ title: 'Turma atualizada com sucesso!' })
-      onUpdated()
+      onUpdated({ ...user, turma: updatedUser.turma })
     } catch (err) {
       toast({
         title: 'Erro ao atualizar turma',
@@ -199,7 +199,7 @@ function UserTable({
   users: Usuario[]
   loading: boolean
   search: string
-  onTurmaUpdated: () => void
+  onTurmaUpdated: (updatedUser: Usuario) => void
 }) {
   const filtered = users.filter(
     (u) =>
@@ -468,7 +468,14 @@ function UserTab({ perfil, onRefresh }: { perfil: PerfilUsuario; onRefresh?: () 
         </Button>
       </div>
 
-      <UserTable users={users} loading={loading} search={search} onTurmaUpdated={load} />
+      <UserTable
+        users={users}
+        loading={loading}
+        search={search}
+        onTurmaUpdated={(updatedUser) => {
+          setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)))
+        }}
+      />
 
       <NovoUsuarioDialog
         open={dialogOpen}
