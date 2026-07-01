@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-01T13:57:46.556Z",
+  "generatedAt": "2026-07-01T14:06:53.273Z",
   "collections": [
     {
       "name": "users",
@@ -29,14 +29,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "ativo",
@@ -172,14 +177,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         },
         {
           "name": "data_primeira_aula",
@@ -229,7 +239,10 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["PREENCHIDA", "EM_REVISAO"]
+          "selectValues": [
+            "PREENCHIDA",
+            "EM_REVISAO"
+          ]
         },
         {
           "name": "secao_1_dados",
@@ -290,17 +303,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE UNIQUE INDEX idx_ficha_conf_user ON ficha_confirmacao_ff (user_id)"]
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_ficha_conf_user ON ficha_confirmacao_ff (user_id)"
+      ]
     },
     {
       "name": "documentos_anexos",
@@ -325,7 +345,11 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["RG", "CPF", "PERFIL"]
+          "selectValues": [
+            "RG",
+            "CPF",
+            "PERFIL"
+          ]
         },
         {
           "name": "arquivo",
@@ -338,17 +362,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_doc_conf ON documentos_anexos (confirmacao_id)"]
+      "indexes": [
+        "CREATE INDEX idx_doc_conf ON documentos_anexos (confirmacao_id)"
+      ]
     },
     {
       "name": "presenca",
@@ -391,14 +422,19 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
       "indexes": [
@@ -447,17 +483,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_mural_turma ON mural (turma)"]
+      "indexes": [
+        "CREATE INDEX idx_mural_turma ON mural (turma)"
+      ]
     },
     {
       "name": "calendario_aula",
@@ -487,17 +530,24 @@
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate"]
+          "autodateTriggers": [
+            "onCreate"
+          ]
         },
         {
           "name": "updated",
           "type": "autodate",
           "required": false,
           "system": false,
-          "autodateTriggers": ["onCreate", "onUpdate"]
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
         }
       ],
-      "indexes": ["CREATE INDEX idx_calendario_turma ON calendario_aula (turma)"]
+      "indexes": [
+        "CREATE INDEX idx_calendario_turma ON calendario_aula (turma)"
+      ]
     }
   ]
 }
