@@ -18,6 +18,7 @@ import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
 import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
 import Atendimentos from './pages/professor/Atendimentos'
+import Alunos from './pages/professor/Alunos'
 import GestaoDashboard from './pages/gestao/GestaoDashboard'
 
 const ProtectedRoute = ({
@@ -134,6 +135,14 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute allowedRoles={['PROFESSOR']}>
             <Chamada />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/professor/alunos"
+        element={
+          <ProtectedRoute allowedRoles={['PROFESSOR']}>
+            <Alunos />
           </ProtectedRoute>
         }
       />
