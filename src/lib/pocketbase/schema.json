@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-01T14:23:49.715Z",
+  "generatedAt": "2026-07-01T14:32:22.381Z",
   "collections": [
     {
       "name": "users",
@@ -562,6 +562,12 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "turma",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [

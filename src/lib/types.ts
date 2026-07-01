@@ -110,12 +110,15 @@ export interface CalendarioAula {
   updated: string
 }
 
+export type AtendimentoTipo = 'INDIVIDUAL' | 'GRUPAL' | 'FAMILIAR' | 'ENCAMINHAMENTO'
+
 export interface Atendimento {
   id: string
   aluna_id: string
   profissional_id: string
   turma: string
   data_atendimento: string
+  tipo: AtendimentoTipo
   descricao: string
   encaminhamento?: string
   created: string

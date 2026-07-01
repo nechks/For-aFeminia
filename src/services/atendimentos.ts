@@ -10,6 +10,7 @@ export interface AlunaOpcao {
 export interface CriarAtendimentoData {
   aluna_id: string
   turma: string
+  tipo: string
   data_atendimento: string
   descricao: string
   encaminhamento?: string

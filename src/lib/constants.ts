@@ -39,3 +39,13 @@ export const getConfirmacaoStatusInfo = (status: string | undefined) =>
     label: status ?? '—',
     color: 'bg-gray-100 text-gray-800 hover:bg-gray-100',
   }
+
+export const tipoAtendimentoLabels: Record<string, string> = {
+  INDIVIDUAL: 'Individual',
+  GRUPAL: 'Grupal',
+  FAMILIAR: 'Familiar',
+  ENCAMINHAMENTO: 'Encaminhamento',
+}
+
+export const getTipoAtendimentoLabel = (tipo: string | undefined) =>
+  tipoAtendimentoLabels[tipo ?? ''] ?? tipo ?? '—'

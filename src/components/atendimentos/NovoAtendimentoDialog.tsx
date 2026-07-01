@@ -6,7 +6,9 @@ import {
   type AlunaOpcao,
   type CriarAtendimentoData,
 } from '@/services/atendimentos'
-import { turmaLabels } from '@/lib/constants'
+import { getCalendarioByTurma } from '@/services/calendario'
+import { turmaLabels, tipoAtendimentoLabels } from '@/lib/constants'
+import type { CalendarioAula } from '@/lib/types'
 import {
   Dialog,
   DialogContent,
@@ -29,7 +31,9 @@ import { toast } from '@/components/ui/use-toast'
 
 interface NovoAtendimentoForm {
   turma: string
+  aula_id: string
   aluna_id: string
+  tipo: string
   data_atendimento: string
   descricao: string
   encaminhamento: string
@@ -37,7 +41,9 @@ interface NovoAtendimentoForm {
 
 const formVazio = (): NovoAtendimentoForm => ({
   turma: '',
+  aula_id: '',
   aluna_id: '',
+  tipo: '',
   data_atendimento: new Date().toISOString().split('T')[0],
   descricao: '',
   encaminhamento: '',
@@ -55,17 +61,22 @@ export function NovoAtendimentoDialog({
   const { user } = useApp()
   const [form, setForm] = useState<NovoAtendimentoForm>(formVazio())
   const [alunas, setAlunas] = useState<AlunaOpcao[]>([])
+  const [aulas, setAulas] = useState<CalendarioAula[]>([])
   const [loadingAlunas, setLoadingAlunas] = useState(false)
+  const [loadingAulas, setLoadingAulas] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const set = (field: keyof NovoAtendimentoForm, value: string) =>
     setForm((f) => ({ ...f, [field]: value }))
 
   const handleTurmaChange = async (turma: string) => {
-    setForm((f) => ({ ...f, turma, aluna_id: '' }))
+    setForm((f) => ({ ...f, turma, aluna_id: '', aula_id: '' }))
     setAlunas([])
+    setAulas([])
     if (!turma) return
+
     setLoadingAlunas(true)
+    setLoadingAulas(true)
     try {
       const lista = await getAlunasPorTurma(turma)
       setAlunas(lista)
@@ -74,16 +85,39 @@ export function NovoAtendimentoDialog({
     } finally {
       setLoadingAlunas(false)
     }
+
+    try {
+      const calendario = await getCalendarioByTurma(turma)
+      setAulas(calendario)
+    } catch {
+      setAulas([])
+    } finally {
+      setLoadingAulas(false)
+    }
+  }
+
+  const handleAulaChange = (aulaId: string) => {
+    const aula = aulas.find((a) => a.id === aulaId)
+    setForm((f) => ({
+      ...f,
+      aula_id: aulaId,
+      data_atendimento: aula ? aula.data_aula : f.data_atendimento,
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
+    if (!form.turma || !form.aluna_id || !form.tipo || !form.data_atendimento) {
+      toast({ title: 'Preencha todos os campos obrigatórios', variant: 'destructive' })
+      return
+    }
     setLoading(true)
     try {
       const data: CriarAtendimentoData = {
         aluna_id: form.aluna_id,
         turma: form.turma,
+        tipo: form.tipo,
         data_atendimento: form.data_atendimento,
         descricao: form.descricao,
         encaminhamento: form.encaminhamento || undefined,
@@ -92,6 +126,7 @@ export function NovoAtendimentoDialog({
       toast({ title: 'Atendimento registrado!' })
       setForm(formVazio())
       setAlunas([])
+      setAulas([])
       onOpenChange(false)
       onSuccess()
     } catch (err) {
@@ -102,15 +137,24 @@ export function NovoAtendimentoDialog({
     }
   }
 
+  const handleOpenChange = (v: boolean) => {
+    if (!v) {
+      setForm(formVazio())
+      setAlunas([])
+      setAulas([])
+    }
+    onOpenChange(v)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Novo Atendimento</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Núcleo (Turma)</label>
+            <label className="text-sm font-medium">Núcleo (Turma) *</label>
             <Select value={form.turma} onValueChange={handleTurmaChange} required>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o núcleo..." />
@@ -126,7 +170,47 @@ export function NovoAtendimentoDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Aluna</label>
+            <label className="text-sm font-medium">Filtro de Aulas</label>
+            <Select
+              value={form.aula_id}
+              onValueChange={handleAulaChange}
+              disabled={!form.turma || loadingAulas}
+            >
+              <SelectTrigger>
+                {loadingAulas ? (
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Carregando...
+                  </span>
+                ) : (
+                  <SelectValue
+                    placeholder={
+                      form.turma
+                        ? aulas.length === 0
+                          ? 'Nenhuma aula cadastrada no núcleo'
+                          : 'Selecione uma aula (opcional)...'
+                        : 'Selecione o núcleo primeiro'
+                    }
+                  />
+                )}
+              </SelectTrigger>
+              <SelectContent>
+                {aulas.length === 0 && !loadingAulas ? (
+                  <div className="py-4 text-center text-sm text-muted-foreground">
+                    Nenhuma aula cadastrada neste núcleo.
+                  </div>
+                ) : (
+                  aulas.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {new Date(a.data_aula + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Aluna *</label>
             <Select
               value={form.aluna_id}
               onValueChange={(v) => set('aluna_id', v)}
@@ -162,18 +246,36 @@ export function NovoAtendimentoDialog({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Data do Atendimento</label>
-            <Input
-              type="date"
-              value={form.data_atendimento}
-              onChange={(e) => set('data_atendimento', e.target.value)}
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Tipo de Atendimento *</label>
+              <Select value={form.tipo} onValueChange={(v) => set('tipo', v)} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(tipoAtendimentoLabels).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>
+                      {v}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Data do Atendimento *</label>
+              <Input
+                type="date"
+                value={form.data_atendimento}
+                onChange={(e) => set('data_atendimento', e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Descrição</label>
+            <label className="text-sm font-medium">Descrição *</label>
             <Textarea
               placeholder="Descreva o atendimento realizado..."
               className="min-h-[120px] resize-none"
@@ -194,10 +296,10 @@ export function NovoAtendimentoDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading || !form.aluna_id}>
+            <Button type="submit" disabled={loading || !form.aluna_id || !form.tipo || !form.turma}>
               {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Registrar
             </Button>

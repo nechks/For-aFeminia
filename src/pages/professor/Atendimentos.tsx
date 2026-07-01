@@ -3,7 +3,7 @@ import { useApp } from '@/store/app-context'
 import { useRealtime } from '@/hooks/use-realtime'
 import { Atendimento } from '@/lib/types'
 import { getAtendimentos, deletarAtendimento } from '@/services/atendimentos'
-import { turmaLabels } from '@/lib/constants'
+import { turmaLabels, getTipoAtendimentoLabel } from '@/lib/constants'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -128,6 +128,9 @@ export default function Atendimentos() {
                         <Badge variant="outline" className="text-xs">
                           {turmaLabel}
                         </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          {getTipoAtendimentoLabel(a.tipo)}
+                        </Badge>
                         <span className="text-xs text-muted-foreground">
                           {new Date(a.data_atendimento + 'T00:00:00').toLocaleDateString('pt-BR')}
                         </span>
@@ -197,6 +200,9 @@ export default function Atendimentos() {
                 </span>
                 <span>
                   <strong>Profissional:</strong> {detalhe.expand?.profissional_id?.name ?? '—'}
+                </span>
+                <span>
+                  <strong>Tipo:</strong> {getTipoAtendimentoLabel(detalhe.tipo)}
                 </span>
               </div>
               <div>
