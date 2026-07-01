@@ -41,9 +41,15 @@ import {
   HeartHandshake,
   BarChart3,
   MapPin,
+  Pencil,
+  Check,
 } from 'lucide-react'
 import { turmaLabels } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
+import { cn } from '@/lib/utils'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { updateUserTurma } from '@/services/usuarios'
+import { Pencil, Check } from 'lucide-react'
 
 // ─── Configuração dos perfis ───────────────────────────────────────────────────
 
@@ -120,14 +126,81 @@ async function listUsers(perfil: PerfilUsuario): Promise<Usuario[]> {
   return users
 }
 
+function UserTurmaCell({ user, onUpdated }: { user: Usuario; onUpdated: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const currentLabel = user.turma ? (turmaLabels[user.turma] ?? user.turma) : 'N/A'
+
+  const handleSelect = async (turma: string) => {
+    if (turma === (user.turma ?? '')) {
+      setOpen(false)
+      return
+    }
+    setLoading(true)
+    try {
+      await updateUserTurma(user.id, turma)
+      toast({ title: 'Turma atualizada com sucesso!' })
+      onUpdated()
+    } catch (err) {
+      toast({
+        title: 'Erro ao atualizar turma',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
+    } finally {
+      setLoading(false)
+      setOpen(false)
+    }
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Pencil className="h-3 w-3 opacity-50 hover:opacity-100 transition-opacity" />
+          )}
+          {currentLabel}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-1" align="start">
+        <div className="space-y-0.5">
+          <p className="px-3 py-1.5 text-xs font-medium text-muted-foreground">Selecionar turma</p>
+          {Object.entries(turmaLabels).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => handleSelect(key)}
+              disabled={loading}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-sm text-sm hover:bg-accent transition-colors flex items-center justify-between disabled:opacity-50',
+                user.turma === key && 'bg-accent font-medium',
+              )}
+            >
+              {label}
+              {user.turma === key && <Check className="h-3.5 w-3.5 text-primary" />}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function UserTable({
   users,
   loading,
   search,
+  onTurmaUpdated,
 }: {
   users: Usuario[]
   loading: boolean
   search: string
+  onTurmaUpdated: () => void
 }) {
   const filtered = users.filter(
     (u) =>
@@ -182,8 +255,8 @@ function UserTable({
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {u.turma ? (turmaLabels[u.turma] ?? u.turma) : 'N/A'}
+                <TableCell>
+                  <UserTurmaCell user={u} onUpdated={onTurmaUpdated} />
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {u.created ? new Date(u.created).toLocaleDateString('pt-BR') : '—'}
@@ -396,7 +469,7 @@ function UserTab({ perfil, onRefresh }: { perfil: PerfilUsuario; onRefresh?: () 
         </Button>
       </div>
 
-      <UserTable users={users} loading={loading} search={search} />
+      <UserTable users={users} loading={loading} search={search} onTurmaUpdated={load} />
 
       <NovoUsuarioDialog
         open={dialogOpen}
