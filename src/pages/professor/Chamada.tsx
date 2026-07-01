@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useApp } from '@/store/app-context'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   getPresencasTurma,
@@ -30,10 +31,10 @@ import { toast } from '@/components/ui/use-toast'
 import { Save, Loader2 } from 'lucide-react'
 import { turmaLabels } from '@/lib/constants'
 
-const TURMAS = Object.keys(turmaLabels)
-
 export default function Chamada() {
-  const [turma, setTurma] = useState<string>('CENTRO_VITORIA')
+  const { user } = useApp()
+  const turmaProfessor = user?.turma ?? ''
+  const [turma, setTurma] = useState<string>(turmaProfessor)
   const [dataAula, setDataAula] = useState(new Date().toISOString().split('T')[0])
   const [alunos, setAlunos] = useState<PresencaAluno[]>([])
   const [loading, setLoading] = useState(false)
@@ -133,18 +134,24 @@ export default function Chamada() {
                 onChange={(e) => setDataAula(e.target.value)}
                 className="w-40"
               />
-              <Select value={turma} onValueChange={setTurma}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Turma" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TURMAS.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {turmaLabels[t]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {turmaProfessor ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md border bg-muted text-sm font-medium w-[200px]">
+                  {turmaLabels[turmaProfessor] ?? turmaProfessor}
+                </div>
+              ) : (
+                <Select value={turma} onValueChange={setTurma}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Turma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(turmaLabels).map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {turmaLabels[t]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         </CardHeader>
