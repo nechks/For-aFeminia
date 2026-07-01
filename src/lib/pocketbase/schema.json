@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-01T14:17:54.589Z",
+  "generatedAt": "2026-07-01T14:23:49.715Z",
   "collections": [
     {
       "name": "users",
@@ -498,6 +498,76 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_calendario_turma ON calendario_aula (turma)"]
+    },
+    {
+      "name": "atendimentos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.perfil = \"ASSISTENTE_SOCIAL\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"PROFESSOR\"",
+        "view": "@request.auth.perfil = \"ASSISTENTE_SOCIAL\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\" || @request.auth.perfil = \"PROFESSOR\"",
+        "create": "@request.auth.perfil = \"ASSISTENTE_SOCIAL\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "update": "@request.auth.perfil = \"ASSISTENTE_SOCIAL\" || @request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\"",
+        "delete": "@request.auth.perfil = \"ADMINISTRATIVO\" || @request.auth.perfil = \"GESTAO_GERAL\""
+      },
+      "fields": [
+        {
+          "name": "profissional_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "aluna_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "data_atendimento",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["INDIVIDUAL", "GRUPAL", "FAMILIAR", "ENCAMINHAMENTO"]
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "encaminhamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_atendimentos_profissional ON atendimentos (profissional_id)",
+        "CREATE INDEX idx_atendimentos_aluna ON atendimentos (aluna_id)"
+      ]
     }
   ]
 }

@@ -1,50 +1,154 @@
 migrate(
   (app) => {
     var col
+    var exists = true
     try {
       col = app.findCollectionByNameOrId('atendimentos')
     } catch (_) {
-      return
+      exists = false
     }
 
-    col.removeIndex('idx_atendimentos_created_by')
-    col.removeIndex('idx_atendimentos_data')
-    col.removeIndex('idx_atendimentos_tipo')
+    if (exists) {
+      try {
+        col.removeIndex('idx_atendimentos_created_by')
+      } catch (_) {}
+      try {
+        col.removeIndex('idx_atendimentos_data')
+      } catch (_) {}
+      try {
+        col.removeIndex('idx_atendimentos_tipo')
+      } catch (_) {}
 
-    col.fields.removeByName('created_by')
-    col.fields.removeByName('data')
-    col.fields.removeByName('horario')
-    col.fields.removeByName('tipo_acesso')
-    col.fields.removeByName('relatorio')
+      try {
+        col.fields.removeByName('created_by')
+      } catch (_) {}
+      try {
+        col.fields.removeByName('data')
+      } catch (_) {}
+      try {
+        col.fields.removeByName('horario')
+      } catch (_) {}
+      try {
+        col.fields.removeByName('tipo_acesso')
+      } catch (_) {}
+      try {
+        col.fields.removeByName('relatorio')
+      } catch (_) {}
 
-    col.fields.add(
-      new RelationField({
-        name: 'profissional_id',
-        required: true,
-        collectionId: '_pb_users_auth_',
-        cascadeDelete: false,
-        maxSelect: 1,
-      }),
-    )
-    col.fields.add(new TextField({ name: 'data_atendimento', required: true }))
-    col.fields.add(new TextField({ name: 'descricao', required: true }))
-    col.fields.add(new TextField({ name: 'encaminhamento' }))
+      if (!col.fields.getByName('profissional_id')) {
+        col.fields.add(
+          new RelationField({
+            name: 'profissional_id',
+            required: true,
+            collectionId: '_pb_users_auth_',
+            cascadeDelete: false,
+            maxSelect: 1,
+          }),
+        )
+      }
+      if (!col.fields.getByName('aluna_id')) {
+        col.fields.add(
+          new RelationField({
+            name: 'aluna_id',
+            required: true,
+            collectionId: '_pb_users_auth_',
+            cascadeDelete: false,
+            maxSelect: 1,
+          }),
+        )
+      }
+      if (!col.fields.getByName('data_atendimento')) {
+        col.fields.add(new TextField({ name: 'data_atendimento', required: true }))
+      }
+      if (!col.fields.getByName('descricao')) {
+        col.fields.add(new TextField({ name: 'descricao', required: true }))
+      }
+      if (!col.fields.getByName('encaminhamento')) {
+        col.fields.add(new TextField({ name: 'encaminhamento' }))
+      }
+      if (!col.fields.getByName('tipo')) {
+        col.fields.add(
+          new SelectField({
+            name: 'tipo',
+            required: true,
+            values: ['INDIVIDUAL', 'GRUPAL', 'FAMILIAR', 'ENCAMINHAMENTO'],
+            maxSelect: 1,
+          }),
+        )
+      }
+      if (!col.fields.getByName('created')) {
+        col.fields.add(new AutodateField({ name: 'created', onCreate: true, onUpdate: false }))
+      }
+      if (!col.fields.getByName('updated')) {
+        col.fields.add(new AutodateField({ name: 'updated', onCreate: true, onUpdate: true }))
+      }
 
-    col.listRule =
-      '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL" || @request.auth.perfil = "PROFESSOR"'
-    col.viewRule =
-      '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL" || @request.auth.perfil = "PROFESSOR"'
-    col.createRule =
-      '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
-    col.updateRule =
-      '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
-    col.deleteRule =
-      '@request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
+      col.listRule =
+        '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL" || @request.auth.perfil = "PROFESSOR"'
+      col.viewRule =
+        '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL" || @request.auth.perfil = "PROFESSOR"'
+      col.createRule =
+        '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
+      col.updateRule =
+        '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
+      col.deleteRule =
+        '@request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
 
-    col.addIndex('idx_atendimentos_profissional', false, 'profissional_id', '')
-    col.addIndex('idx_atendimentos_aluna', false, 'aluna_id', '')
+      col.addIndex('idx_atendimentos_profissional', false, 'profissional_id', '')
+      col.addIndex('idx_atendimentos_aluna', false, 'aluna_id', '')
 
-    app.save(col)
+      app.save(col)
+    } else {
+      col = new Collection({
+        name: 'atendimentos',
+        type: 'base',
+        listRule:
+          '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL" || @request.auth.perfil = "PROFESSOR"',
+        viewRule:
+          '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL" || @request.auth.perfil = "PROFESSOR"',
+        createRule:
+          '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"',
+        updateRule:
+          '@request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"',
+        deleteRule:
+          '@request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"',
+        fields: [
+          {
+            name: 'profissional_id',
+            type: 'relation',
+            required: true,
+            collectionId: '_pb_users_auth_',
+            cascadeDelete: false,
+            maxSelect: 1,
+          },
+          {
+            name: 'aluna_id',
+            type: 'relation',
+            required: true,
+            collectionId: '_pb_users_auth_',
+            cascadeDelete: false,
+            maxSelect: 1,
+          },
+          { name: 'data_atendimento', type: 'text', required: true },
+          {
+            name: 'tipo',
+            type: 'select',
+            required: true,
+            values: ['INDIVIDUAL', 'GRUPAL', 'FAMILIAR', 'ENCAMINHAMENTO'],
+            maxSelect: 1,
+          },
+          { name: 'descricao', type: 'text', required: true },
+          { name: 'encaminhamento', type: 'text' },
+          { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+          { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true },
+        ],
+        indexes: [
+          'CREATE INDEX idx_atendimentos_profissional ON atendimentos (profissional_id)',
+          'CREATE INDEX idx_atendimentos_aluna ON atendimentos (aluna_id)',
+        ],
+      })
+      app.save(col)
+    }
   },
   (app) => {
     var col
@@ -53,43 +157,6 @@ migrate(
     } catch (_) {
       return
     }
-
-    col.removeIndex('idx_atendimentos_profissional')
-    col.removeIndex('idx_atendimentos_aluna')
-
-    col.fields.removeByName('profissional_id')
-    col.fields.removeByName('data_atendimento')
-    col.fields.removeByName('descricao')
-    col.fields.removeByName('encaminhamento')
-
-    col.fields.add(
-      new RelationField({
-        name: 'created_by',
-        required: true,
-        collectionId: '_pb_users_auth_',
-        cascadeDelete: false,
-        maxSelect: 1,
-      }),
-    )
-    col.fields.add(new TextField({ name: 'data', required: true }))
-    col.fields.add(new TextField({ name: 'horario', required: true }))
-    col.fields.add(new TextField({ name: 'tipo_acesso', required: true }))
-    col.fields.add(new TextField({ name: 'relatorio', required: true }))
-
-    col.listRule =
-      '@request.auth.id != "" && (tipo_acesso = "PUBLICO" || created_by = @request.auth.id)'
-    col.viewRule =
-      '@request.auth.id != "" && (tipo_acesso = "PUBLICO" || created_by = @request.auth.id)'
-    col.createRule =
-      '@request.auth.perfil = "PROFESSOR" || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "ASSISTENTE_SOCIAL" || @request.auth.perfil = "GESTAO_GERAL"'
-    col.updateRule = 'created_by = @request.auth.id'
-    col.deleteRule =
-      'created_by = @request.auth.id || @request.auth.perfil = "ADMINISTRATIVO" || @request.auth.perfil = "GESTAO_GERAL"'
-
-    col.addIndex('idx_atendimentos_created_by', false, 'created_by', '')
-    col.addIndex('idx_atendimentos_data', false, 'data', '')
-    col.addIndex('idx_atendimentos_tipo', false, 'tipo_acesso', '')
-
-    app.save(col)
+    app.delete(col)
   },
 )
