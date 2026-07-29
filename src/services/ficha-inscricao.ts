@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import api from '@/lib/api/client'
 import { FichaInscricaoFF, StatusInscricao } from '@/lib/types'
 
 export interface PaginatedInscricoes {
@@ -21,45 +21,25 @@ export const getInscricoesPaginated = async (
   filter: InscricaoFilter = {},
 ): Promise<PaginatedInscricoes> => {
   const { page = 1, perPage = 10, status, turma, search } = filter
-  const filters: string[] = []
+  const params = new URLSearchParams({ page: String(page), perPage: String(perPage) })
+  if (status && status !== 'ALL') params.set('status', status)
+  if (turma && turma !== 'ALL') params.set('turma', turma)
+  if (search && search.trim()) params.set('search', search.trim())
 
-  if (status && status !== 'ALL') {
-    filters.push(`status = "${status}"`)
-  }
-  if (turma && turma !== 'ALL') {
-    filters.push(`turma = "${turma}"`)
-  }
-  if (search && search.trim()) {
-    const term = search.trim()
-    filters.push(`(nome_completo ~ "${term}" || cpf ~ "${term}")`)
-  }
-
-  const filterStr = filters.join(' && ')
-  const result = await pb.collection('ficha_inscricao_ff').getList(page, perPage, {
-    sort: '-created',
-    ...(filterStr ? { filter: filterStr } : {}),
-  })
-
-  return {
-    items: result.items as unknown as FichaInscricaoFF[],
-    totalItems: result.totalItems,
-    totalPages: result.totalPages,
-    page: result.page,
-    perPage: result.perPage,
-  }
+  return api.get<PaginatedInscricoes>(`/api/inscricoes?${params.toString()}`)
 }
 
 export const getInscricoes = async (): Promise<FichaInscricaoFF[]> => {
-  return await pb.collection('ficha_inscricao_ff').getFullList({ sort: '-created' })
+  return api.get<FichaInscricaoFF[]>('/api/inscricoes/all')
 }
 
 export const getInscricao = async (id: string): Promise<FichaInscricaoFF> => {
-  return await pb.collection('ficha_inscricao_ff').getOne(id)
+  return api.get<FichaInscricaoFF>(`/api/inscricoes/${id}`)
 }
 
-export const getMinhaInscricao = async (userId: string): Promise<FichaInscricaoFF | null> => {
+export const getMinhaInscricao = async (_userId: string): Promise<FichaInscricaoFF | null> => {
   try {
-    return await pb.collection('ficha_inscricao_ff').getFirstListItem(`user_id = "${userId}"`)
+    return await api.get<FichaInscricaoFF | null>('/api/inscricoes/minha')
   } catch {
     return null
   }
@@ -68,14 +48,14 @@ export const getMinhaInscricao = async (userId: string): Promise<FichaInscricaoF
 export const createInscricao = async (
   data: Partial<FichaInscricaoFF>,
 ): Promise<FichaInscricaoFF> => {
-  return await pb.collection('ficha_inscricao_ff').create({ ...data, status: 'AGUARDANDO' })
+  return api.post<FichaInscricaoFF>('/api/inscricao/forca-feminina', data)
 }
 
 export const updateInscricao = async (
   id: string,
   data: Partial<FichaInscricaoFF>,
 ): Promise<FichaInscricaoFF> => {
-  return await pb.collection('ficha_inscricao_ff').update(id, data)
+  return api.patch<FichaInscricaoFF>(`/api/inscricoes/${id}`, data)
 }
 
 export const updateStatus = async (
@@ -83,5 +63,5 @@ export const updateStatus = async (
   status: StatusInscricao,
   extraData?: Record<string, unknown>,
 ): Promise<FichaInscricaoFF> => {
-  return await pb.collection('ficha_inscricao_ff').update(id, { status, ...extraData })
+  return api.patch<FichaInscricaoFF>(`/api/inscricoes/${id}`, { status, ...extraData })
 }

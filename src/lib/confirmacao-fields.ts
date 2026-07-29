@@ -1,4 +1,13 @@
-export type FieldType = 'text' | 'date' | 'select' | 'textarea' | 'radio' | 'checkbox'
+export type FieldType =
+  | 'text'
+  | 'date'
+  | 'select'
+  | 'textarea'
+  | 'radio'
+  | 'checkbox'
+  | 'multi-select-add'
+  | 'children'
+  | 'profession'
 
 export interface FormField {
   name: string
@@ -9,6 +18,8 @@ export interface FormField {
   placeholder?: string
   prefillKey?: string
   readonly?: boolean
+  showWhen?: { field: string; equals: string }
+  hideWhen?: { field: string; equals: string }
 }
 
 export interface FormSection {
@@ -23,12 +34,12 @@ export interface FormSection {
 export const formSections: FormSection[] = [
   {
     id: 1,
-    title: 'Dados Pessoais',
+    title: 'Dados pessoais',
     storageKey: 'secao_1_dados',
     fields: [
       {
         name: 'nome_completo',
-        label: 'Nome Completo',
+        label: 'Nome completo',
         type: 'text',
         required: true,
         prefillKey: 'nome_completo',
@@ -36,7 +47,7 @@ export const formSections: FormSection[] = [
       },
       {
         name: 'data_nascimento',
-        label: 'Data de Nascimento',
+        label: 'Data de nascimento',
         type: 'date',
         required: true,
         prefillKey: 'data_nascimento',
@@ -67,10 +78,10 @@ export const formSections: FormSection[] = [
       },
       {
         name: 'estado_civil',
-        label: 'Estado Civil',
+        label: 'Estado civil',
         type: 'select',
         required: true,
-        options: ['Solteira', 'Casada', 'Divorciada', 'Viuva', 'Uniao Estavel'],
+        options: ['Solteira', 'Casada', 'Divorciada', 'Viúva', 'União estável'],
       },
       {
         name: 'naturalidade',
@@ -83,12 +94,12 @@ export const formSections: FormSection[] = [
   },
   {
     id: 2,
-    title: 'Endereco',
+    title: 'Endereço',
     storageKey: 'secao_2_dados',
     fields: [
       { name: 'cep', label: 'CEP', type: 'text', required: true, prefillKey: 'cep' },
-      { name: 'endereco', label: 'Endereco', type: 'text', required: true, prefillKey: 'endereco' },
-      { name: 'numero', label: 'Numero', type: 'text', required: true },
+      { name: 'endereco', label: 'Endereço', type: 'text', required: true, prefillKey: 'endereco' },
+      { name: 'numero', label: 'Número', type: 'text', required: true },
       { name: 'bairro', label: 'Bairro', type: 'text', required: true, prefillKey: 'bairro' },
       { name: 'cidade', label: 'Cidade', type: 'text', required: true, prefillKey: 'cidade' },
       { name: 'estado', label: 'Estado', type: 'text', required: true, prefillKey: 'estado' },
@@ -96,32 +107,45 @@ export const formSections: FormSection[] = [
   },
   {
     id: 3,
-    title: 'Dados Profissionais',
+    title: 'Dados profissionais',
     storageKey: 'secao_3_dados',
     fields: [
-      { name: 'profissao', label: 'Profissao', type: 'text' },
       {
         name: 'situacao_trabalho',
-        label: 'Situacao de Trabalho',
+        label: 'Situação de trabalho',
         type: 'select',
+        required: true,
         options: [
           'Desempregada',
-          'Trabalho Informal',
+          'Trabalho informal',
           'CLT',
-          'Autonoma',
+          'Autônoma',
           'Aposentada',
           'Estudante',
         ],
       },
       {
+        name: 'profissao',
+        label: 'Profissão (CBO)',
+        type: 'profession',
+        required: true,
+        hideWhen: { field: 'situacao_trabalho', equals: 'Desempregada' },
+      },
+      {
         name: 'renda_familiar',
-        label: 'Renda Familiar Per Capita',
+        label: 'Renda familiar per capita — salário mínimo de 2026: R$ 1.621,00',
         type: 'select',
-        options: ['Ate 1/2 SM', '1/2 a 1 SM', '1 a 2 SM', '2 a 3 SM', 'Mais de 3 SM'],
+        options: [
+          'Até R$ 810,50',
+          'De R$ 810,51 a R$ 1.621,00',
+          'De R$ 1.621,01 a R$ 3.242,00',
+          'De R$ 3.242,01 a R$ 4.863,00',
+          'Acima de R$ 4.863,00',
+        ],
       },
       {
         name: 'pessoas_residencia',
-        label: 'Pessoas na Residencia',
+        label: 'Pessoas na residência',
         type: 'text',
         placeholder: 'Ex: 4',
       },
@@ -130,45 +154,45 @@ export const formSections: FormSection[] = [
         label: 'Escolaridade',
         type: 'select',
         options: [
-          'Fundamental Incompleto',
-          'Fundamental Completo',
-          'Medio Incompleto',
-          'Medio Completo',
-          'Superior Incompleto',
-          'Superior Completo',
-          'Pos-graduacao',
+          'Fundamental incompleto',
+          'Fundamental completo',
+          'Médio incompleto',
+          'Médio completo',
+          'Superior incompleto',
+          'Superior completo',
+          'Pós-graduação',
         ],
       },
     ],
   },
   {
     id: 4,
-    title: 'Saude',
+    title: 'Saúde',
     storageKey: 'secao_4_dados',
     fields: [
       {
         name: 'comorbidades',
-        label: 'Possui comorbidades ou restricoes fisicas?',
+        label: 'Possui comorbidades ou restrições físicas?',
         type: 'textarea',
         placeholder: 'Ex: Asma, problemas articulares...',
       },
       {
         name: 'medicacao_continua',
-        label: 'Faz uso continuo de medicacao?',
+        label: 'Faz uso contínuo de medicação?',
         type: 'radio',
-        options: ['Sim', 'Nao'],
+        options: ['Sim', 'Não'],
       },
       { name: 'quais_medicacoes', label: 'Quais medicamentos?', type: 'text' },
       { name: 'alergias', label: 'Possui alergias?', type: 'textarea' },
       {
         name: 'cirurgias_recentes',
-        label: 'Cirurgias recentes (ultimos 6 meses)?',
+        label: 'Cirurgias recentes (últimos 6 meses)?',
         type: 'radio',
-        options: ['Sim', 'Nao'],
+        options: ['Sim', 'Não'],
       },
       {
         name: 'contato_emergencia',
-        label: 'Contato de Emergencia',
+        label: 'Contato de emergência',
         type: 'text',
         required: true,
         placeholder: '(27) 99999-9999',
@@ -177,12 +201,12 @@ export const formSections: FormSection[] = [
   },
   {
     id: 5,
-    title: 'Uniforme e Turma',
+    title: 'Uniforme e turma',
     storageKey: 'secao_5_dados',
     fields: [
       {
         name: 'turma',
-        label: 'Turma Selecionada',
+        label: 'Turma selecionada',
         type: 'text',
         required: true,
         prefillKey: 'turma',
@@ -190,130 +214,172 @@ export const formSections: FormSection[] = [
       },
       {
         name: 'tamanho_camisa',
-        label: 'Tamanho da Camisa',
+        label: 'Tamanho da camisa',
         type: 'select',
         required: true,
         options: ['PP', 'P', 'M', 'G', 'GG', 'XG'],
       },
       {
-        name: 'tamanho_calca',
-        label: 'Tamanho da Calca',
+        name: 'tamanho_luva',
+        label: 'Tamanho da luva',
         type: 'select',
         required: true,
-        options: ['36', '38', '40', '42', '44', '46', '48'],
+        options: ['P', 'M', 'G'],
       },
-      { name: 'tamanho_calcado', label: 'Tamanho do Calcado', type: 'text', required: true },
-      { name: 'data_primeira_aula', label: 'Data da Primeira Aula', type: 'date' },
     ],
   },
   {
     id: 6,
-    title: 'Perfil Socioeconomico',
+    title: 'Perfil socioeconômico',
     storageKey: 'secao_6_socioeconomico',
     confidential: true,
-    description: 'Dados confidenciais acessiveis apenas a Assistente Social e Coordenacao.',
+    description: 'Dados confidenciais acessíveis apenas à Assistente Social e à Coordenação.',
     fields: [
       {
         name: 'tipo_moradia',
-        label: 'Tipo de Moradia',
+        label: 'Tipo de moradia',
         type: 'select',
-        options: ['Propria', 'Alugada', 'Cedida', 'Ocupacao', 'Financiada'],
+        options: ['Própria', 'Alugada', 'Cedida', 'Ocupação', 'Financiada'],
       },
       {
         name: 'situacao_moradia',
-        label: 'Situacao da Moradia',
+        label: 'Situação da moradia',
         type: 'select',
-        options: ['Boa', 'Regular', 'Precaria'],
+        options: ['Boa', 'Regular', 'Precária'],
       },
       {
         name: 'possui_agua',
-        label: 'Possui agua encanada?',
+        label: 'Possui água encanada?',
         type: 'radio',
-        options: ['Sim', 'Nao'],
+        options: ['Sim', 'Não'],
       },
       {
         name: 'possui_luz',
-        label: 'Possui energia eletrica?',
+        label: 'Possui energia elétrica?',
         type: 'radio',
-        options: ['Sim', 'Nao'],
+        options: ['Sim', 'Não'],
       },
       {
         name: 'possui_esgoto',
-        label: 'Possui esgoto sanitario?',
+        label: 'Possui esgoto sanitário?',
         type: 'radio',
-        options: ['Sim', 'Nao'],
+        options: ['Sim', 'Não'],
       },
       {
         name: 'bens_familia',
-        label: 'Bens da Familia',
-        type: 'textarea',
-        placeholder: 'Geladeira, fogao, maquina de lavar...',
+        label: 'Bens da família',
+        type: 'multi-select-add',
+        options: [
+          'Geladeira',
+          'Fogão',
+          'Televisão',
+          'Máquina de lavar',
+          'Micro-ondas',
+          'Computador ou notebook',
+          'Celular',
+          'Ventilador',
+          'Ar-condicionado',
+          'Automóvel',
+          'Motocicleta',
+          'Bicicleta',
+        ],
+        placeholder: 'Digite outro bem',
       },
       {
         name: 'programas_sociais',
         label: 'Participa de programas sociais?',
         type: 'textarea',
-        placeholder: 'Bolsa Familia, Minha Casa Minha Vida...',
+        placeholder: 'Bolsa Família, Minha Casa Minha Vida...',
+      },
+      {
+        name: 'tem_filhos',
+        label: 'Você tem filho(s)?',
+        type: 'radio',
+        options: ['Sim', 'Não'],
+        required: true,
+      },
+      {
+        name: 'tem_rede_apoio_filhos',
+        label: 'Você tem uma rede de apoio para deixar seu(s) filho(s) durante as atividades?',
+        type: 'radio',
+        options: ['Sim', 'Não'],
+        required: true,
+        showWhen: { field: 'tem_filhos', equals: 'Sim' },
+      },
+      {
+        name: 'precisa_levar_filhos',
+        label: 'Você precisará levar seu(s) filho(s) para as atividades?',
+        type: 'radio',
+        options: ['Sim', 'Não'],
+        required: true,
+        showWhen: { field: 'tem_rede_apoio_filhos', equals: 'Não' },
+      },
+      {
+        name: 'criancas',
+        label: 'Dados das crianças',
+        type: 'children',
+        required: true,
+        showWhen: { field: 'precisa_levar_filhos', equals: 'Sim' },
       },
     ],
   },
   {
     id: 7,
-    title: 'Historico de Violencia',
+    title: 'Histórico de violência',
     storageKey: 'secao_7_violencia',
     confidential: true,
-    description: 'Informacoes sensiveis. Acesso restrito a Assistente Social e Coordenacao.',
+    description: 'Informações sensíveis. Acesso restrito à Assistente Social e à Coordenação.',
     fields: [
       {
         name: 'situacao_violencia',
-        label: 'Ja passou por situacao de violencia?',
+        label: 'Já passou por situação de violência?',
         type: 'radio',
-        options: ['Sim', 'Nao', 'Prefiro nao responder'],
+        options: ['Sim', 'Não', 'Prefiro não responder'],
       },
       {
         name: 'tipo_violencia',
-        label: 'Tipo de Violencia',
+        label: 'Tipo de violência',
         type: 'select',
-        options: ['Fisica', 'Psicologica', 'Sexual', 'Patrimonial', 'Moral', 'Nenhuma'],
+        options: ['Física', 'Psicológica', 'Sexual', 'Patrimonial', 'Moral', 'Nenhuma'],
       },
       {
         name: 'denuncio',
-        label: 'Realizou boletim de ocorrencia?',
+        label: 'Realizou boletim de ocorrência?',
         type: 'radio',
-        options: ['Sim', 'Nao', 'Nao se aplica'],
+        options: ['Sim', 'Não', 'Não se aplica'],
       },
       {
         name: 'apoio_familiar',
         label: 'Possui apoio familiar?',
         type: 'radio',
-        options: ['Sim', 'Nao', 'Parcial'],
+        options: ['Sim', 'Não', 'Parcial'],
       },
-      { name: 'observacoes', label: 'Observacoes', type: 'textarea' },
+      { name: 'observacoes', label: 'Observações', type: 'textarea' },
     ],
   },
   {
     id: 8,
-    title: 'Declaracoes Finais',
+    title: 'Declarações finais',
     storageKey: 'secao_8_declaracoes',
-    description: 'Termos e consentimentos necessarios para finalizacao.',
+    description: 'Termos e consentimentos necessários para a finalização.',
     fields: [
       {
         name: 'compromisso_frequencia',
         label:
-          'Estou ciente da carga horaria e me comprometo a ter no minimo 75% de frequencia para manter a vaga e receber o certificado.',
+          'Estou ciente da carga horária e me comprometo a ter no mínimo 75% de frequência para manter a vaga e receber o certificado.',
         type: 'checkbox',
         required: true,
       },
       {
         name: 'veracidade_informacoes',
         label:
-          'Confirmo a veracidade de todas as informacoes prestadas neste formulario sob as penas da lei.',
+          'Confirmo a veracidade de todas as informações prestadas neste formulário, sob as penas da lei.',
         type: 'checkbox',
         required: true,
       },
       {
         name: 'termos_imagem',
-        label: 'Autorizo o uso de minha imagem para fins institucionais e divulgacao do projeto.',
+        label: 'Autorizo o uso de minha imagem para fins institucionais e divulgação do projeto.',
         type: 'checkbox',
         required: true,
       },
@@ -323,7 +389,7 @@ export const formSections: FormSection[] = [
         type: 'checkbox',
         required: true,
       },
-      { name: 'observacoes_finais', label: 'Observacoes Finais (opcional)', type: 'textarea' },
+      { name: 'observacoes_finais', label: 'Observações finais (opcional)', type: 'textarea' },
     ],
   },
 ]

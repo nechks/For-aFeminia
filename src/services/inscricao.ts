@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import api from '@/lib/api/client'
 
 export interface InscricaoData {
   nome_completo: string
@@ -6,6 +6,8 @@ export interface InscricaoData {
   rg?: string
   data_nascimento: string
   telefone: string
+  email: string
+  password: string
   endereco: string
   bairro: string
   cidade: string
@@ -16,9 +18,5 @@ export interface InscricaoData {
 }
 
 export const submitInscricao = async (data: InscricaoData): Promise<any> => {
-  return await pb.send('/backend/v1/inscricao/forca-feminina', {
-    method: 'POST',
-    body: JSON.stringify(data),
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return api.post('/api/inscricao/forca-feminina', data)
 }

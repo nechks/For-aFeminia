@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useApp } from '@/store/app-context'
 import { PerfilUsuario, Usuario } from '@/lib/types'
-import pb from '@/lib/pocketbase/client'
-import { getErrorMessage } from '@/lib/pocketbase/errors'
+import api from '@/lib/api/client'
+import { getErrorMessage } from '@/lib/api/errors'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -31,7 +31,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { UserPlus, Loader2, Search, GraduationCap, Users, ShieldCheck, HeartHandshake, BarChart3, MapPin } from 'lucide-react'
+import { UserPlus, Loader2, Search, GraduationCap, Users, ShieldCheck, HeartHandshake, BarChart3, MapPin, Trash2, KeyRound, ArrowRightLeft } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
 import { turmaLabels } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
 
@@ -82,14 +83,24 @@ const TABS: PerfilUsuario[] = ['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSIS
 // ─── Listagem ──────────────────────────────────────────────────────────────────
 
 async function listUsers(perfil: PerfilUsuario): Promise<Usuario[]> {
-  const records = await pb.collection('users').getFullList({
-    filter: `perfil = "${perfil}"`,
-    sort: 'name',
-  })
-  return records as unknown as Usuario[]
+  return api.get<Usuario[]>(`/api/users?perfil=${perfil}`)
 }
 
-function UserTable({ users, loading, search }: { users: Usuario[]; loading: boolean; search: string }) {
+function UserTable({
+  users,
+  loading,
+  search,
+  onDelete,
+  onResetPassword,
+  onTransfer,
+}: {
+  users: Usuario[]
+  loading: boolean
+  search: string
+  onDelete?: (user: Usuario) => void
+  onResetPassword?: (user: Usuario) => void
+  onTransfer?: (user: Usuario) => void
+}) {
   const filtered = users.filter(
     (u) =>
       u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -103,20 +114,24 @@ function UserTable({ users, loading, search }: { users: Usuario[]; loading: bool
           <TableRow>
             <TableHead>Nome</TableHead>
             <TableHead>E-mail</TableHead>
+            {onTransfer && <TableHead>Núcleo</TableHead>}
             <TableHead>Status</TableHead>
             <TableHead>Desde</TableHead>
+            {(onDelete || onResetPassword || onTransfer) && (
+              <TableHead className="w-24 text-center">Ações</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center">
+              <TableCell colSpan={onTransfer ? 6 : 5} className="h-24 text-center">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
               </TableCell>
             </TableRow>
           ) : filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={onTransfer ? 6 : 5} className="h-24 text-center text-muted-foreground">
                 Nenhum usuário encontrado.
               </TableCell>
             </TableRow>
@@ -125,6 +140,7 @@ function UserTable({ users, loading, search }: { users: Usuario[]; loading: bool
               <TableRow key={u.id}>
                 <TableCell className="font-medium">{u.name || '—'}</TableCell>
                 <TableCell>{u.email}</TableCell>
+                {onTransfer && <TableCell>{turmaLabels[u.turma ?? ''] ?? u.turma ?? '—'}</TableCell>}
                 <TableCell>
                   {u.ativo ? (
                     <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100" variant="secondary">
@@ -139,12 +155,254 @@ function UserTable({ users, loading, search }: { users: Usuario[]; loading: bool
                 <TableCell className="text-muted-foreground">
                   {u.created ? new Date(u.created).toLocaleDateString('pt-BR') : '—'}
                 </TableCell>
+                {(onDelete || onResetPassword || onTransfer) && (
+                  <TableCell className="text-center">
+                    {onTransfer && (
+                      <Button variant="ghost" size="icon" title="Trocar núcleo" onClick={() => onTransfer(u)}>
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onResetPassword && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-primary"
+                        title="Redefinir senha"
+                        onClick={() => onResetPassword(u)}
+                      >
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {onDelete && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        title="Excluir usuário"
+                        onClick={() => onDelete(u)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </TableCell>
+                )}
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
     </div>
+  )
+}
+
+function TransferirNucleoDialog({ usuario, onClose, onSuccess }: { usuario: Usuario | null; onClose: () => void; onSuccess: () => void }) {
+  const [turma, setTurma] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => { if (usuario) { setTurma(''); setError('') } }, [usuario])
+
+  const transferir = async () => {
+    if (!usuario || !turma) return
+    setLoading(true)
+    try {
+      await api.patch(`/api/users/${usuario.id}/nucleo`, { turma })
+      toast({ title: 'Aluna transferida!', description: 'As faltas anteriores foram mantidas e as próximas chamadas serão no novo núcleo.' })
+      onClose()
+      onSuccess()
+    } catch (err) { setError(getErrorMessage(err)) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <Dialog open={!!usuario} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-5 w-5" /> Transferir de núcleo</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <p className="text-sm">Transferir <strong>{usuario?.name}</strong> para outro núcleo.</p>
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">As presenças e faltas anteriores serão mantidas e continuarão contando no histórico da aluna.</div>
+          <div className="space-y-2"><Label>Novo núcleo</Label><Select value={turma} onValueChange={setTurma}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{Object.entries(turmaLabels).filter(([key]) => key !== usuario?.turma).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={transferir} disabled={!turma || loading}>{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmar transferência</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Dialog de exclusão (justificativa obrigatória + auditoria) ────────────────
+
+function ExcluirUsuarioDialog({
+  usuario,
+  onClose,
+  onSuccess,
+}: {
+  usuario: Usuario | null
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [justificativa, setJustificativa] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (usuario) {
+      setJustificativa('')
+      setError('')
+    }
+  }, [usuario])
+
+  const handleConfirm = async () => {
+    if (!usuario) return
+    if (!justificativa.trim()) {
+      setError('A justificativa é obrigatória para excluir um usuário.')
+      return
+    }
+    setLoading(true)
+    try {
+      await api.delete(`/api/users/${usuario.id}`, { justificativa: justificativa.trim() })
+      toast({ title: 'Usuário excluído.', description: 'A exclusão foi registrada na auditoria.' })
+      onClose()
+      onSuccess()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!usuario} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-destructive">
+            <Trash2 className="h-5 w-5" /> Excluir usuário
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <p className="text-sm">
+            Você deseja apagar <strong>{usuario?.name}</strong> ({usuario?.email})?
+          </p>
+          <div className="space-y-2">
+            <Label>
+              Justificativa <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              placeholder="Descreva o motivo da exclusão (obrigatório)"
+              value={justificativa}
+              onChange={(e) => setJustificativa(e.target.value)}
+              className="min-h-[90px]"
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleConfirm}
+            disabled={loading || !justificativa.trim()}
+          >
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Confirmar exclusão
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Dialog de redefinição de senha (exclusivo da Gestão Geral) ────────────────
+
+function RedefinirSenhaDialog({
+  usuario,
+  onClose,
+}: {
+  usuario: Usuario | null
+  onClose: () => void
+}) {
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmacao, setConfirmacao] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (usuario) {
+      setNovaSenha('')
+      setConfirmacao('')
+      setError('')
+    }
+  }, [usuario])
+
+  const handleConfirm = async () => {
+    if (!usuario) return
+    if (novaSenha.length < 8) {
+      setError('A nova senha deve ter pelo menos 8 caracteres.')
+      return
+    }
+    if (novaSenha !== confirmacao) {
+      setError('A confirmação não confere com a nova senha.')
+      return
+    }
+    setLoading(true)
+    try {
+      await api.post(`/api/users/${usuario.id}/reset-password`, { newPassword: novaSenha })
+      toast({
+        title: 'Senha redefinida.',
+        description: `Informe a nova senha a ${usuario.name} e oriente a troca no primeiro acesso.`,
+      })
+      onClose()
+    } catch (err) {
+      setError(getErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!usuario} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="h-5 w-5" /> Redefinir senha
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <p className="text-sm">
+            Definir uma nova senha para <strong>{usuario?.name}</strong> ({usuario?.email}).
+          </p>
+          <div className="space-y-2">
+            <Label>Nova senha</Label>
+            <Input
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              value={novaSenha}
+              onChange={(e) => setNovaSenha(e.target.value)}
+              minLength={8}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Confirmar nova senha</Label>
+            <Input
+              type="password"
+              value={confirmacao}
+              onChange={(e) => setConfirmacao(e.target.value)}
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={handleConfirm} disabled={loading || !novaSenha || !confirmacao}>
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Redefinir senha
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -302,12 +560,23 @@ function NovoUsuarioDialog({
 // ─── Tab por perfil ────────────────────────────────────────────────────────────
 
 function UserTab({ perfil, onRefresh }: { perfil: PerfilUsuario; onRefresh?: () => void }) {
+  const { user } = useApp()
   const [users, setUsers] = useState<Usuario[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [usuarioParaExcluir, setUsuarioParaExcluir] = useState<Usuario | null>(null)
+  const [usuarioParaResetar, setUsuarioParaResetar] = useState<Usuario | null>(null)
+  const [usuarioParaTransferir, setUsuarioParaTransferir] = useState<Usuario | null>(null)
   const config = PERFIS[perfil]
   const Icon = config.icon
+  // Contas de Gestão Geral não podem ser excluídas (regra 7 do escopo)
+  const podeExcluir = user?.perfil === 'GESTAO_GERAL' && perfil !== 'GESTAO_GERAL'
+  // Criação de usuários é exclusiva da Gestão Geral — o Administrativo apenas visualiza
+  const podeCriar = user?.perfil === 'GESTAO_GERAL'
+  // Redefinição de senha: só a Gestão Geral, e nunca sobre outra conta de Gestão Geral
+  const podeResetarSenha = user?.perfil === 'GESTAO_GERAL' && perfil !== 'GESTAO_GERAL'
+  const podeTransferir = user?.perfil === 'GESTAO_GERAL' && perfil === 'ALUNA_FF'
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -337,13 +606,38 @@ function UserTab({ perfil, onRefresh }: { perfil: PerfilUsuario; onRefresh?: () 
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <UserPlus className="h-4 w-4 mr-2" />
-          Novo(a) {config.label}
-        </Button>
+        {podeCriar && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Novo(a) {config.label}
+          </Button>
+        )}
       </div>
 
-      <UserTable users={users} loading={loading} search={search} />
+      <UserTable
+        users={users}
+        loading={loading}
+        search={search}
+        onDelete={podeExcluir ? setUsuarioParaExcluir : undefined}
+        onResetPassword={podeResetarSenha ? setUsuarioParaResetar : undefined}
+        onTransfer={podeTransferir ? setUsuarioParaTransferir : undefined}
+      />
+
+      <TransferirNucleoDialog usuario={usuarioParaTransferir} onClose={() => setUsuarioParaTransferir(null)} onSuccess={load} />
+
+      <RedefinirSenhaDialog
+        usuario={usuarioParaResetar}
+        onClose={() => setUsuarioParaResetar(null)}
+      />
+
+      <ExcluirUsuarioDialog
+        usuario={usuarioParaExcluir}
+        onClose={() => setUsuarioParaExcluir(null)}
+        onSuccess={() => {
+          load()
+          onRefresh?.()
+        }}
+      />
 
       <NovoUsuarioDialog
         open={dialogOpen}
@@ -372,9 +666,9 @@ export default function AdminUsuarios() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Cadastro de Usuários</CardTitle>
+          <CardTitle>Lista de Usuários</CardTitle>
           <CardDescription>
-            Cada tipo de usuário tem acesso a funcionalidades específicas do sistema.
+            Consulte os usuários por tipo de acesso ou adicione uma nova conta quando necessário.
           </CardDescription>
         </CardHeader>
         <CardContent>

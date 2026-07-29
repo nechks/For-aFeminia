@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import api from '@/lib/api/client'
 import { Presenca } from '@/lib/types'
 
 export interface PresencaAluno {
@@ -9,6 +9,7 @@ export interface PresencaAluno {
   presenca: {
     id: string
     presente: boolean
+    justificada: boolean
     justificativa: string
   } | null
 }
@@ -22,6 +23,7 @@ export interface PresencaTurmaResponse {
 export interface RegistroPresenca {
   user_id: string
   presente: boolean
+  justificada: boolean
   justificativa?: string
 }
 
@@ -30,23 +32,32 @@ export const getPresencasTurma = async (
   dataAula: string,
 ): Promise<PresencaTurmaResponse> => {
   const params = new URLSearchParams({ turma, dataAula })
-  return pb.send(`/backend/v1/professor/presenca?${params.toString()}`, { method: 'GET' })
+  return api.get<PresencaTurmaResponse>(`/api/professor/presenca?${params.toString()}`)
 }
 
 export const registrarPresencas = async (
   dataAula: string,
   registros: RegistroPresenca[],
+  turma?: string,
 ): Promise<any> => {
-  return pb.send('/backend/v1/professor/presenca', {
-    method: 'POST',
-    body: JSON.stringify({ dataAula, registros }),
-    headers: { 'Content-Type': 'application/json' },
-  })
+  return api.post('/api/professor/presenca', { dataAula, turma, registros })
 }
 
-export const getMinhasPresencas = async (userId: string): Promise<Presenca[]> => {
-  return await pb.collection('presenca').getFullList({
-    filter: `user_id = "${userId}"`,
-    sort: '-data_aula',
-  })
+export interface PresencaDetalhe {
+  id: string
+  user_id: string
+  aluna_nome: string
+  turma: string
+  data_aula: string
+  presente: boolean
+  justificativa: string
+  professor_nome: string
+}
+
+export const getPresencasDetalhes = async (presente: boolean): Promise<PresencaDetalhe[]> => {
+  return api.get<PresencaDetalhe[]>(`/api/presencas/detalhes?presente=${presente}`)
+}
+
+export const getMinhasPresencas = async (_userId: string): Promise<Presenca[]> => {
+  return api.get<Presenca[]>('/api/presencas/minhas')
 }

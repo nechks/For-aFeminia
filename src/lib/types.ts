@@ -25,6 +25,10 @@ export interface Usuario {
   email: string
   perfil: PerfilUsuario
   turma?: string
+  projeto_id?: string
+  nucleo_id?: string
+  turma_id?: string
+  tipo_profissional?: string
   ativo: boolean
   avatar?: string
   created: string
@@ -39,6 +43,7 @@ export interface FichaInscricaoFF {
   rg?: string
   data_nascimento?: string
   telefone?: string
+  email?: string
   endereco?: string
   bairro?: string
   cidade?: string
@@ -97,6 +102,8 @@ export interface Mural {
   titulo: string
   conteudo: string
   data_publicacao: string
+  /** Última data em que o aviso aparece no painel da aluna; vazio = só o dia da publicação. */
+  exibir_ate?: string
   turma?: string
   created: string
   updated: string

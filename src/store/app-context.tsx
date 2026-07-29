@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { useRealtime } from '@/hooks/use-realtime'
-import { FichaInscricaoFF, StatusInscricao, Usuario } from '@/lib/types'
+import { FichaInscricaoFF, PerfilUsuario, StatusInscricao, Usuario } from '@/lib/types'
 import { getInscricoes, createInscricao, updateStatus } from '@/services/ficha-inscricao'
 import { getMinhaConfirmacao, submitConfirmacao } from '@/services/ficha-confirmacao'
 
@@ -29,6 +29,15 @@ interface AppState {
   ) => Promise<{ error: any }>
   submitFichaConfirmacao: (formData: FormData) => Promise<{ error: any }>
   minhaConfirmacao: any
+  /** Inscrição da própria aluna (para ALUNA_FF a listagem retorna apenas a dela). */
+  minhaInscricao: FichaInscricaoFF | null
+  /**
+   * Painel completo liberado somente com inscrição APROVADA e ficha de confirmação
+   * preenchida (regra 2.2 do escopo).
+   */
+  alunaLiberada: boolean
+  /** Indica que os dados necessários para decidir o gating da aluna já foram carregados. */
+  alunaGateReady: boolean
   refreshInscricoes: () => Promise<void>
 }
 
@@ -38,6 +47,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { user, signIn, signOut, signUp, isAuthenticated, loading: authLoading } = useAuth()
   const [inscricoes, setInscricoes] = useState<FichaInscricaoFF[]>([])
   const [minhaConfirmacao, setMinhaConfirmacao] = useState<any>(null)
+  const [inscricoesLoaded, setInscricoesLoaded] = useState(false)
+  const [confirmacaoLoaded, setConfirmacaoLoaded] = useState(false)
 
   const loadInscricoes = useCallback(async () => {
     if (!isAuthenticated) {
@@ -49,6 +60,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setInscricoes(records as unknown as FichaInscricaoFF[])
     } catch (err) {
       console.error('Failed to load inscricoes:', err)
+    } finally {
+      setInscricoesLoaded(true)
     }
   }, [isAuthenticated])
 
@@ -66,6 +79,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMinhaConfirmacao(result)
     } catch {
       setMinhaConfirmacao(null)
+    } finally {
+      setConfirmacaoLoaded(true)
     }
   }, [isAuthenticated, user])
 
@@ -128,6 +143,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const minhaInscricao = user?.perfil === 'ALUNA_FF' ? (inscricoes[0] ?? null) : null
+  const alunaLiberada =
+    user?.perfil === 'ALUNA_FF'
+      ? minhaInscricao?.status === 'APROVADA' && !!minhaConfirmacao
+      : true
+  const alunaGateReady =
+    user?.perfil !== 'ALUNA_FF' || (inscricoesLoaded && confirmacaoLoaded)
+
   const value = useMemo<AppState>(
     () => ({
       user,
@@ -141,9 +164,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateInscricaoStatus,
       submitFichaConfirmacao,
       minhaConfirmacao,
+      minhaInscricao,
+      alunaLiberada,
+      alunaGateReady,
       refreshInscricoes: loadInscricoes,
     }),
-    [user, isAuthenticated, authLoading, inscricoes, minhaConfirmacao, loadInscricoes],
+    [user, isAuthenticated, authLoading, inscricoes, minhaConfirmacao, minhaInscricao, alunaLiberada, alunaGateReady, loadInscricoes],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { submitInscricao } from '@/services/inscricao'
+import { buscarCep, formatCep } from '@/lib/viacep'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -33,36 +34,111 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Shield, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
-const formSchema = z.object({
-  nome_completo: z.string().min(3, 'Nome completo é obrigatório'),
-  data_nascimento: z.string().refine((val) => {
-    return new Date().getFullYear() - new Date(val).getFullYear() >= 18
-  }, 'Você deve ter pelo menos 18 anos'),
-  cpf: z.string().min(11, 'CPF inválido'),
-  rg: z.string().optional(),
-  telefone: z.string().min(10, 'Telefone inválido'),
-  cep: z.string().min(8, 'CEP inválido'),
-  rua: z.string().min(1, 'Obrigatório'),
-  numero: z.string().min(1, 'Obrigatório'),
-  bairro: z.string().min(1, 'Obrigatório'),
-  cidade: z.string().min(1, 'Obrigatório'),
-  estado: z.string().min(2, 'Obrigatório'),
-  turma: z.string().min(1, 'Selecione uma turma'),
-  aceite_lgpd: z.boolean().refine((v) => v, 'É necessário autorizar'),
-})
+import { turmaLabels } from '@/lib/constants'
+import { getErrorMessage, extractFieldErrors } from '@/lib/api/errors'
+
+// Em qual passo do formulário cada campo aparece — para levar a usuária de volta ao erro.
+const fieldStep: Record<string, number> = {
+  nome_completo: 1,
+  data_nascimento: 1,
+  cpf: 1,
+  telefone: 1,
+  cep: 2,
+  rua: 2,
+  numero: 2,
+  bairro: 2,
+  cidade: 2,
+  estado: 2,
+  turma: 3,
+  email: 4,
+  password: 4,
+  aceite_lgpd: 4,
+}
+// Valida CPF pelos dígitos verificadores (mesma regra do backend), evitando avançar com CPF falso.
+function isCpfValido(raw: string): boolean {
+  const cpf = raw.replace(/\D/g, '')
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false
+  let sum1 = 0
+  for (let i = 0; i < 9; i++) sum1 += Number(cpf[i]) * (10 - i)
+  let d1 = 11 - (sum1 % 11)
+  if (d1 >= 10) d1 = 0
+  let sum2 = 0
+  for (let i = 0; i < 10; i++) sum2 += Number(cpf[i]) * (11 - i)
+  let d2 = 11 - (sum2 % 11)
+  if (d2 >= 10) d2 = 0
+  return d1 === Number(cpf[9]) && d2 === Number(cpf[10])
+}
+
+const formSchema = z
+  .object({
+    nome_completo: z.string().min(3, 'Nome completo é obrigatório'),
+    data_nascimento: z.string().refine((val) => {
+      return new Date().getFullYear() - new Date(val).getFullYear() >= 18
+    }, 'Você deve ter pelo menos 18 anos'),
+    cpf: z.string().refine(isCpfValido, 'CPF inválido'),
+    rg: z.string().optional(),
+    telefone: z.string().min(10, 'Telefone inválido'),
+    cep: z.string().min(8, 'CEP inválido'),
+    rua: z.string().min(1, 'Obrigatório'),
+    numero: z.string().min(1, 'Obrigatório'),
+    bairro: z.string().min(1, 'Obrigatório'),
+    cidade: z.string().min(1, 'Obrigatório'),
+    estado: z.string().min(2, 'Obrigatório'),
+    turma: z.string().min(1, 'Selecione uma turma'),
+    email: z.string().email('E-mail inválido'),
+    password: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres'),
+    confirmar_senha: z.string(),
+    aceite_lgpd: z.boolean().refine((v) => v, 'É necessário autorizar'),
+  })
+  .refine((data) => data.password === data.confirmar_senha, {
+    message: 'As senhas não conferem',
+    path: ['confirmar_senha'],
+  })
 
 export default function Inscricao() {
   const [step, setStep] = useState(1)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [buscandoCep, setBuscandoCep] = useState(false)
   const totalSteps = 4
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { aceite_lgpd: false, rg: '' },
+    defaultValues: {
+      nome_completo: '',
+      data_nascimento: '',
+      cpf: '',
+      rg: '',
+      telefone: '',
+      cep: '',
+      rua: '',
+      numero: '',
+      bairro: '',
+      cidade: '',
+      estado: '',
+      turma: '',
+      email: '',
+      password: '',
+      confirmar_senha: '',
+      aceite_lgpd: false,
+    },
   })
 
+  const handleCepChange = async (raw: string, onChange: (v: string) => void) => {
+    const masked = formatCep(raw)
+    onChange(masked)
+    if (masked.replace(/\D/g, '').length !== 8) return
+    setBuscandoCep(true)
+    const endereco = await buscarCep(masked)
+    setBuscandoCep(false)
+    if (!endereco) return
+    if (endereco.logradouro) form.setValue('rua', endereco.logradouro, { shouldValidate: true })
+    if (endereco.bairro) form.setValue('bairro', endereco.bairro, { shouldValidate: true })
+    if (endereco.cidade) form.setValue('cidade', endereco.cidade, { shouldValidate: true })
+    if (endereco.estado) form.setValue('estado', endereco.estado, { shouldValidate: true })
+  }
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    const { rua, numero, ...rest } = values
+    const { rua, numero, confirmar_senha, ...rest } = values
     try {
       await submitInscricao({
         ...rest,
@@ -70,16 +146,20 @@ export default function Inscricao() {
       })
       setIsSubmitted(true)
       toast({ title: 'Inscrição recebida!' })
-    } catch (err: any) {
-      const response = err.response || {}
-      if (response.fields) {
-        Object.entries(response.fields).forEach(([field, msg]) => {
-          form.setError(field as any, { message: msg as string })
-        })
-      }
+    } catch (err) {
+      // Mostra o motivo real vindo do backend (CPF inválido, e-mail já cadastrado, etc.)
+      // e leva a usuária de volta ao passo do campo com problema.
+      const fields = extractFieldErrors(err)
+      let primeiroPasso: number | null = null
+      Object.entries(fields).forEach(([field, msg]) => {
+        form.setError(field as any, { message: msg })
+        const s = fieldStep[field]
+        if (s && (primeiroPasso === null || s < primeiroPasso)) primeiroPasso = s
+      })
+      if (primeiroPasso !== null) setStep(primeiroPasso)
       toast({
         title: 'Erro ao enviar',
-        description: response.message || 'Verifique os campos.',
+        description: getErrorMessage(err),
         variant: 'destructive',
       })
     }
@@ -90,6 +170,7 @@ export default function Inscricao() {
       1: ['nome_completo', 'data_nascimento', 'cpf', 'telefone'],
       2: ['cep', 'rua', 'numero', 'bairro', 'cidade', 'estado'],
       3: ['turma'],
+      4: ['email', 'password', 'confirmar_senha'],
     }
     const isValid = await form.trigger(fields[step] as any)
     if (isValid) setStep((s) => Math.min(s + 1, totalSteps))
@@ -106,7 +187,8 @@ export default function Inscricao() {
             <CardTitle className="text-2xl">Inscrição Recebida!</CardTitle>
             <CardDescription className="text-base mt-2">
               Sua inscrição foi registrada com sucesso. A administração avaliará os dados e entrará
-              em contato pelo WhatsApp.
+              em contato pelo WhatsApp. Assim que for aprovada, você poderá entrar no sistema com o
+              e-mail e a senha que cadastrou.
             </CardDescription>
           </CardHeader>
           <CardFooter>
@@ -121,9 +203,16 @@ export default function Inscricao() {
 
   return (
     <div className="min-h-screen bg-muted/30 flex flex-col items-center py-10 px-4">
-      <div className="w-full max-w-2xl mb-8 flex items-center justify-center gap-2">
-        <Shield className="w-8 h-8 text-primary" />
-        <h1 className="text-xl font-bold text-primary">Força Feminina</h1>
+      <div className="w-full max-w-2xl mb-8 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" />
+          Voltar
+        </Link>
+        <div className="flex items-center gap-2">
+          <Shield className="w-8 h-8 text-primary" />
+          <h1 className="text-xl font-bold text-primary">Força Feminina</h1>
+        </div>
+        <div className="w-16" />
       </div>
 
       <Card className="w-full max-w-2xl border-none shadow-elevation animate-fade-in">
@@ -228,8 +317,16 @@ export default function Inscricao() {
                         <FormItem className="md:col-span-1">
                           <FormLabel>CEP</FormLabel>
                           <FormControl>
-                            <Input placeholder="29000-000" {...field} className="h-11" />
+                            <Input
+                              placeholder="29000-000"
+                              {...field}
+                              onChange={(e) => handleCepChange(e.target.value, field.onChange)}
+                              className="h-11"
+                            />
                           </FormControl>
+                          {buscandoCep && (
+                            <p className="text-xs text-muted-foreground">Buscando endereço...</p>
+                          )}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -324,21 +421,9 @@ export default function Inscricao() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="CENTRO_VITORIA">
-                              Centro - Vitória (Sábados 14h-16h30)
-                            </SelectItem>
-                            <SelectItem value="AEST_SERRA">
-                              Clube AEST - Serra (Sábados 9h-11h30)
-                            </SelectItem>
-                            <SelectItem value="ITAQUARI_CARIACICA">
-                              Itaquari - Cariacica (Segundas 18h30-21h)
-                            </SelectItem>
-                            <SelectItem value="CONJUNTO_CARAPINA_SERRA">
-                              Conj. Carapina I - Serra (Quartas 18h30-21h)
-                            </SelectItem>
-                            <SelectItem value="ATLANTICA_VILLE_VITORIA">
-                              Atlântica Ville - Vitória (Sextas 18h30-21h)
-                            </SelectItem>
+                            {Object.entries(turmaLabels).map(([codigo, nome]) => (
+                              <SelectItem key={codigo} value={codigo}>{nome}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -350,7 +435,64 @@ export default function Inscricao() {
 
               {step === 4 && (
                 <div className="space-y-5 animate-slide-up">
-                  <h2 className="text-xl font-semibold mb-4">Termos e Condições</h2>
+                  <h2 className="text-xl font-semibold mb-4">Crie seu Acesso</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Defina o e-mail e a senha que você usará para entrar no sistema. O acesso será
+                    liberado assim que sua inscrição for aprovada.
+                  </p>
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>E-mail</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            placeholder="seu@email.com"
+                            {...field}
+                            className="h-11"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Senha</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="Mínimo 8 caracteres"
+                              {...field}
+                              className="h-11"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="confirmar_senha"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirmar Senha</FormLabel>
+                          <FormControl>
+                            <Input type="password" {...field} className="h-11" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <h2 className="text-xl font-semibold mb-4 pt-2">Termos e Condições</h2>
                   <div className="bg-muted p-4 rounded-md text-sm text-muted-foreground mb-6">
                     <p className="mb-2">
                       <strong>LGPD - Lei Geral de Proteção de Dados</strong>

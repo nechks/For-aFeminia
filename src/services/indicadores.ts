@@ -1,8 +1,10 @@
-import pb from '@/lib/pocketbase/client'
+import api from '@/lib/api/client'
 
 export interface IndicadoresData {
   totalStudents: number
   totalInscricoes: number
+  aguardandoAprovacao: number
+  listaEspera: number
   dropoutRate: number
   canceladas: number
   statusDistribution: Record<string, number>
@@ -14,5 +16,5 @@ export interface IndicadoresData {
 }
 
 export const getIndicadores = async (): Promise<IndicadoresData> => {
-  return pb.send('/backend/v1/indicadores/dashboard', { method: 'GET' })
+  return api.get<IndicadoresData>('/api/indicadores/dashboard')
 }

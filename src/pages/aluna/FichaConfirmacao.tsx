@@ -3,13 +3,33 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/app-context'
 import { getMinhaConfirmacao, submitConfirmacao } from '@/services/ficha-confirmacao'
 import { formSections } from '@/lib/confirmacao-fields'
+import { buscarCep, formatCep } from '@/lib/viacep'
 import { FieldRenderer } from '@/components/confirmacao/FieldRenderer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/components/ui/use-toast'
-import { ArrowRight, ArrowLeft, CheckCircle2, Lock } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  Lock,
+  Hourglass,
+  Clock,
+  XCircle,
+  BellRing,
+} from 'lucide-react'
 
 export default function FichaConfirmacao() {
   const { user, inscricoes } = useApp()
@@ -21,6 +41,7 @@ export default function FichaConfirmacao() {
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [avisoFinalizacao, setAvisoFinalizacao] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -47,20 +68,90 @@ export default function FichaConfirmacao() {
   }, [minhaInscricao])
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>
-  if (!minhaInscricao || minhaInscricao.status !== 'APROVADA')
+
+  // Enquanto a inscrição não é aprovada, a aluna vê o andamento — não o formulário de matrícula.
+  if (!minhaInscricao || minhaInscricao.status !== 'APROVADA') {
+    const estados: Record<
+      string,
+      { icon: typeof Hourglass; cor: string; titulo: string; texto: string }
+    > = {
+      AGUARDANDO: {
+        icon: Hourglass,
+        cor: 'text-amber-500',
+        titulo: 'Inscrição em análise',
+        texto:
+          'Recebemos sua inscrição! Ela está aguardando aprovação da coordenação. Assim que for aprovada, você poderá preencher aqui a sua ficha de matrícula.',
+      },
+      EM_ANALISE: {
+        icon: Clock,
+        cor: 'text-sky-500',
+        titulo: 'Inscrição em análise',
+        texto:
+          'Sua inscrição está sendo analisada pela coordenação. Você será avisada assim que houver uma resposta.',
+      },
+      LISTA_ESPERA: {
+        icon: Clock,
+        cor: 'text-violet-500',
+        titulo: 'Você está na lista de espera',
+        texto:
+          'No momento as vagas estão preenchidas e você está na lista de espera. Caso surja uma vaga, a coordenação entrará em contato.',
+      },
+      REPROVADA: {
+        icon: XCircle,
+        cor: 'text-rose-500',
+        titulo: 'Inscrição não aprovada',
+        texto:
+          'Sua inscrição não foi aprovada nesta edição. Em caso de dúvidas, procure a coordenação do projeto.',
+      },
+      CANCELADA: {
+        icon: XCircle,
+        cor: 'text-gray-500',
+        titulo: 'Inscrição cancelada',
+        texto: 'Sua inscrição foi cancelada. Procure a coordenação para mais informações.',
+      },
+    }
+    const estado = minhaInscricao
+      ? (estados[minhaInscricao.status] ?? estados.AGUARDANDO)
+      : {
+          icon: Hourglass,
+          cor: 'text-amber-500',
+          titulo: 'Nenhuma inscrição encontrada',
+          texto:
+            'Faça sua inscrição no Projeto Força Feminina para acompanhar o andamento por aqui.',
+        }
+    const Icone = estado.icon
     return (
-      <div className="p-8 text-center">
-        Acesso negado. Apenas alunas aprovadas podem preencher esta ficha.
+      <div className="max-w-md mx-auto py-12 px-4">
+        <Card>
+          <CardContent className="py-10 text-center space-y-4">
+            <Icone className={`w-14 h-14 mx-auto ${estado.cor}`} />
+            <h1 className="text-2xl font-bold">{estado.titulo}</h1>
+            <p className="text-muted-foreground">{estado.texto}</p>
+            <Button variant="outline" onClick={() => navigate('/aluna/perfil')}>
+              Ir para Meu Perfil
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
+  }
   if (submitted)
     return (
       <div className="max-w-md mx-auto text-center py-12">
         <CheckCircle2 className="w-16 h-16 text-green-600 mx-auto mb-4" />
         <h1 className="text-2xl font-bold">Ficha Enviada!</h1>
         <p className="text-muted-foreground mt-2">
-          Sua ficha foi registrada e nao pode ser modificada.
+          Sua ficha foi registrada e não pode ser modificada.
         </p>
+        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-left text-amber-900">
+          <p className="flex items-center gap-2 font-semibold">
+            <BellRing className="h-5 w-5" /> Atenção à primeira aula
+          </p>
+          <p className="mt-1 text-sm">
+            A participação na primeira aula é obrigatória. A data será divulgada no Mural de Avisos;
+            acompanhe o mural regularmente.
+          </p>
+        </div>
         <Button className="mt-6" onClick={() => navigate('/aluna/dashboard')}>
           Voltar ao Painel
         </Button>
@@ -69,7 +160,52 @@ export default function FichaConfirmacao() {
 
   const section = formSections[step - 1]
   const totalSteps = formSections.length
-  const handleChange = (n: string, v: any) => setValues((p) => ({ ...p, [n]: v }))
+  const campoVisivel = (field: (typeof section.fields)[number]) =>
+    (!field.showWhen || values[field.showWhen.field] === field.showWhen.equals) &&
+    (!field.hideWhen || values[field.hideWhen.field] !== field.hideWhen.equals)
+
+  const handleChange = (n: string, v: any) => {
+    if (n === 'cep' && typeof v === 'string') {
+      const masked = formatCep(v)
+      setValues((p) => ({ ...p, cep: masked }))
+      if (masked.replace(/\D/g, '').length === 8) {
+        buscarCep(masked).then((e) => {
+          if (!e) return
+          setValues((p) => ({
+            ...p,
+            endereco: e.logradouro || p.endereco,
+            bairro: e.bairro || p.bairro,
+            cidade: e.cidade || p.cidade,
+            estado: e.estado || p.estado,
+          }))
+        })
+      }
+      return
+    }
+    setValues((p) => {
+      const proximo = { ...p, [n]: v }
+      if (n === 'tem_filhos' && v !== 'Sim') {
+        delete proximo.tem_rede_apoio_filhos
+        delete proximo.precisa_levar_filhos
+        delete proximo.criancas
+      }
+      if (n === 'situacao_trabalho' && v === 'Desempregada') {
+        delete proximo.profissao
+      }
+      if (n === 'tem_rede_apoio_filhos' && v !== 'Não') {
+        delete proximo.precisa_levar_filhos
+        delete proximo.criancas
+      }
+      if (n === 'precisa_levar_filhos') {
+        if (v === 'Sim' && !Array.isArray(proximo.criancas)) {
+          proximo.criancas = [{ nome: '', idade: '' }]
+        } else if (v !== 'Sim') {
+          delete proximo.criancas
+        }
+      }
+      return proximo
+    })
+  }
   const handleFileChange = (n: string, f: File | null) =>
     setFiles((p) => {
       const n2 = { ...p }
@@ -79,9 +215,31 @@ export default function FichaConfirmacao() {
     })
 
   const validateStep = () => {
-    for (const f of section.fields)
+    for (const f of section.fields) {
+      if (!campoVisivel(f)) continue
       if (f.required && f.type === 'checkbox' && !values[f.name]) return false
-      else if (f.required && f.type !== 'checkbox' && !values[f.name]) return false
+      else if (
+        f.required &&
+        f.type === 'profession' &&
+        !/^\d{4}-\d{2} - .+/.test(values[f.name] ?? '')
+      )
+        return false
+      else if (f.required && f.type === 'children') {
+        const criancas = values[f.name]
+        if (
+          !Array.isArray(criancas) ||
+          criancas.length === 0 ||
+          criancas.some(
+            (crianca) =>
+              !String(crianca?.nome ?? '').trim() ||
+              String(crianca?.idade ?? '').trim() === '' ||
+              Number(crianca.idade) < 0 ||
+              Number(crianca.idade) > 17,
+          )
+        )
+          return false
+      } else if (f.required && f.type !== 'checkbox' && !values[f.name]) return false
+    }
     if (step === totalSteps && (!files.foto_rg || !files.foto_cpf || !files.foto_perfil))
       return false
     return true
@@ -89,7 +247,7 @@ export default function FichaConfirmacao() {
 
   const handleNext = () => {
     if (!validateStep()) {
-      toast({ title: 'Preencha os campos obrigatorios', variant: 'destructive' })
+      toast({ title: 'Preencha os campos obrigatórios', variant: 'destructive' })
       return
     }
     setStep((s) => Math.min(s + 1, totalSteps))
@@ -97,7 +255,7 @@ export default function FichaConfirmacao() {
 
   const handleSubmit = async () => {
     if (!validateStep()) {
-      toast({ title: 'Preencha todos os campos obrigatorios', variant: 'destructive' })
+      toast({ title: 'Preencha todos os campos obrigatórios', variant: 'destructive' })
       return
     }
     setSubmitting(true)
@@ -106,7 +264,10 @@ export default function FichaConfirmacao() {
       formSections.forEach((s) => {
         const d: Record<string, any> = {}
         s.fields.forEach((f) => {
-          if (values[f.name] != null) d[f.name] = values[f.name]
+          const visivel =
+            (!f.showWhen || values[f.showWhen.field] === f.showWhen.equals) &&
+            (!f.hideWhen || values[f.hideWhen.field] !== f.hideWhen.equals)
+          if (visivel && values[f.name] != null) d[f.name] = values[f.name]
         })
         fd.append(s.storageKey, JSON.stringify(d))
       })
@@ -128,10 +289,18 @@ export default function FichaConfirmacao() {
     }
   }
 
+  const confirmarFinalizacao = () => {
+    if (!validateStep()) {
+      toast({ title: 'Preencha todos os campos obrigatórios', variant: 'destructive' })
+      return
+    }
+    setAvisoFinalizacao(true)
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-12">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Ficha de Confirmacao</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Ficha de Confirmação</h1>
         <p className="text-muted-foreground mt-1">
           Passo {step} de {totalSteps}
         </p>
@@ -140,7 +309,7 @@ export default function FichaConfirmacao() {
       {section.confidential && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-lg flex gap-2 text-sm">
           <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-          <p>Secao Confidencial — acessivel apenas a Assistente Social e Coordenacao.</p>
+          <p>Seção confidencial — acessível apenas à Assistente Social e à Coordenação.</p>
         </div>
       )}
       <Card>
@@ -150,7 +319,7 @@ export default function FichaConfirmacao() {
             <p className="text-sm text-muted-foreground">{section.description}</p>
           )}
           <div className="space-y-4">
-            {section.fields.map((f) => (
+            {section.fields.filter(campoVisivel).map((f) => (
               <FieldRenderer
                 key={f.name}
                 field={f}
@@ -161,7 +330,7 @@ export default function FichaConfirmacao() {
           </div>
           {step === totalSteps && (
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="font-semibold">Documentos Obrigatorios</h3>
+              <h3 className="font-semibold">Documentos obrigatórios</h3>
               {[
                 { n: 'foto_rg', l: 'Foto do RG' },
                 { n: 'foto_cpf', l: 'Foto do CPF' },
@@ -189,15 +358,39 @@ export default function FichaConfirmacao() {
           </Button>
           {step < totalSteps ? (
             <Button onClick={handleNext}>
-              Proximo <ArrowRight className="w-4 h-4 ml-2" />
+              Próximo <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           ) : (
-            <Button onClick={handleSubmit} disabled={submitting}>
+            <Button onClick={confirmarFinalizacao} disabled={submitting}>
               {submitting ? 'Enviando...' : 'Concluir'}
             </Button>
           )}
         </div>
       </Card>
+      <AlertDialog open={avisoFinalizacao} onOpenChange={setAvisoFinalizacao}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <BellRing className="h-5 w-5 text-amber-600" /> Aviso importante
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <span className="block font-medium text-foreground">
+                A participação na primeira aula é obrigatória.
+              </span>
+              <span className="block">
+                A data da primeira aula será divulgada no Mural de Avisos. Fique atenta e acompanhe
+                o mural regularmente.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar e revisar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSubmit} disabled={submitting}>
+              Estou ciente e quero finalizar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

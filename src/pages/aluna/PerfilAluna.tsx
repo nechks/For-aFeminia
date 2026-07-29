@@ -1,14 +1,105 @@
 import { useState, useRef } from 'react'
 import { useApp } from '@/store/app-context'
 import { useAuth } from '@/hooks/use-auth'
-import pb from '@/lib/pocketbase/client'
+import api, { authStore, fileUrl } from '@/lib/api/client'
+import { Usuario } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useToast } from '@/hooks/use-toast'
-import { Camera, Save, User } from 'lucide-react'
+import { getErrorMessage } from '@/lib/api/errors'
+import { Camera, KeyRound, Loader2, Save, User } from 'lucide-react'
+
+function AlterarSenhaCard() {
+  const { toast } = useToast()
+  const [senhaAtual, setSenhaAtual] = useState('')
+  const [novaSenha, setNovaSenha] = useState('')
+  const [confirmacao, setConfirmacao] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setErro('')
+    if (novaSenha.length < 8) {
+      setErro('A nova senha deve ter pelo menos 8 caracteres.')
+      return
+    }
+    if (novaSenha !== confirmacao) {
+      setErro('A confirmação não confere com a nova senha.')
+      return
+    }
+    setSalvando(true)
+    try {
+      await api.post('/api/auth/change-password', {
+        currentPassword: senhaAtual,
+        newPassword: novaSenha,
+      })
+      setSenhaAtual('')
+      setNovaSenha('')
+      setConfirmacao('')
+      toast({ title: 'Senha alterada com sucesso!' })
+    } catch (err) {
+      setErro(getErrorMessage(err))
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <KeyRound className="w-5 h-5" />
+          Alterar senha
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="senhaAtual">Senha atual</Label>
+            <Input
+              id="senhaAtual"
+              type="password"
+              value={senhaAtual}
+              onChange={(e) => setSenhaAtual(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="novaSenha">Nova senha</Label>
+            <Input
+              id="novaSenha"
+              type="password"
+              placeholder="Mínimo 8 caracteres"
+              value={novaSenha}
+              onChange={(e) => setNovaSenha(e.target.value)}
+              required
+              minLength={8}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirmacaoSenha">Confirmar nova senha</Label>
+            <Input
+              id="confirmacaoSenha"
+              type="password"
+              value={confirmacao}
+              onChange={(e) => setConfirmacao(e.target.value)}
+              required
+            />
+          </div>
+          {erro && <p className="text-sm text-destructive">{erro}</p>}
+          <Button type="submit" disabled={salvando} className="w-full">
+            <KeyRound className="w-4 h-4 mr-2" />
+            {salvando ? 'Alterando...' : 'Alterar senha'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function PerfilAluna() {
   const { user } = useApp()
@@ -18,7 +109,7 @@ export default function PerfilAluna() {
   const [nome, setNome] = useState(user?.name ?? '')
   const [nomeSocial, setNomeSocial] = useState(user?.nomeSocial ?? '')
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [saving, setSaving] = useState(false)
 
   if (!user) return null
@@ -26,7 +117,7 @@ export default function PerfilAluna() {
   const avatarUrl = avatarPreview
     ? avatarPreview
     : user.avatar
-      ? pb.files.getURL(user, user.avatar)
+      ? fileUrl(user.avatar)
       : null
 
   const iniciais = (user.nomeSocial || user.name || '?')
@@ -36,11 +127,50 @@ export default function PerfilAluna() {
     .join('')
     .toUpperCase()
 
-  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // A foto é salva imediatamente ao ser escolhida — sem depender do botão "Salvar alterações".
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
-    setAvatarFile(file)
+    if (!file || !user) return
+    const tiposOk = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+    if (!tiposOk.includes(file.type)) {
+      toast({
+        title: 'Formato de imagem não suportado',
+        description:
+          'Use uma imagem PNG, JPEG, WebP ou GIF. Fotos de iPhone (HEIC) precisam ser convertidas para um desses formatos.',
+        variant: 'destructive',
+      })
+      e.target.value = ''
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'Imagem muito grande',
+        description: 'O tamanho máximo permitido é 5 MB.',
+        variant: 'destructive',
+      })
+      e.target.value = ''
+      return
+    }
+
     setAvatarPreview(URL.createObjectURL(file))
+    setUploadingAvatar(true)
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+      const atualizado = await api.patchForm<Usuario>(`/api/users/${user.id}`, formData)
+      authStore.setUser(atualizado)
+      toast({ title: 'Foto atualizada com sucesso!' })
+    } catch (err) {
+      setAvatarPreview(null)
+      toast({
+        title: 'Não foi possível salvar a foto',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      })
+    } finally {
+      setUploadingAvatar(false)
+      e.target.value = ''
+    }
   }
 
   async function handleSave() {
@@ -50,20 +180,19 @@ export default function PerfilAluna() {
       const formData = new FormData()
       formData.append('name', nome)
       formData.append('nomeSocial', nomeSocial)
-      if (avatarFile) formData.append('avatar', avatarFile)
 
-      await pb.collection('users').update(user.id, formData)
-      await pb.collection('users').authRefresh()
+      const atualizado = await api.patchForm<Usuario>(`/api/users/${user.id}`, formData)
+      authStore.setUser(atualizado)
       toast({ title: 'Perfil atualizado com sucesso!' })
-    } catch {
-      toast({ title: 'Erro ao salvar', description: 'Tente novamente.', variant: 'destructive' })
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: getErrorMessage(err), variant: 'destructive' })
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="max-w-lg mx-auto py-8 px-4">
+    <div className="max-w-lg mx-auto py-8 px-4 space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -83,20 +212,27 @@ export default function PerfilAluna() {
               </Avatar>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1.5 shadow hover:bg-primary/90 transition"
+                disabled={uploadingAvatar}
+                className="absolute bottom-0 right-0 bg-primary text-primary-foreground rounded-full p-1.5 shadow hover:bg-primary/90 transition disabled:opacity-70"
                 title="Alterar foto"
               >
-                <Camera className="w-4 h-4" />
+                {uploadingAvatar ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4" />
+                )}
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp,image/gif"
                 className="hidden"
                 onChange={handleAvatarChange}
               />
             </div>
-            <p className="text-xs text-muted-foreground">Clique na câmera para alterar a foto</p>
+            <p className="text-xs text-muted-foreground">
+              {uploadingAvatar ? 'Salvando foto...' : 'Clique na câmera — a foto é salva na hora'}
+            </p>
           </div>
 
           {/* Campos */}
@@ -137,6 +273,8 @@ export default function PerfilAluna() {
           </Button>
         </CardContent>
       </Card>
+
+      <AlterarSenhaCard />
     </div>
   )
 }

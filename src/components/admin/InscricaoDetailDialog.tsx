@@ -42,6 +42,7 @@ export function InscricaoDetailDialog({ inscricao, open, onOpenChange }: Props) 
             <Field label="RG" value={inscricao.rg} />
             <Field label="Data de Nascimento" value={inscricao.data_nascimento} />
             <Field label="Telefone" value={inscricao.telefone} />
+            <Field label="E-mail" value={inscricao.email} />
             <Field label="Turma" value={turmaLabels[inscricao.turma ?? ''] ?? inscricao.turma} />
             <Field label="CEP" value={inscricao.cep} />
             <Field label="Endereço" value={inscricao.endereco} />

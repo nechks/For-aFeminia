@@ -133,8 +133,18 @@ function NovoAtendimentoDialog({
   const [loadingAlunas, setLoadingAlunas] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // Regra 9.1 do escopo: professor(a) só atende alunas do próprio núcleo
+  const turmaFixa = user?.perfil === 'PROFESSOR' ? (user.turma ?? '') : ''
+
   const set = (field: keyof NovoAtendimentoForm, value: string) =>
     setForm((f) => ({ ...f, [field]: value }))
+
+  useEffect(() => {
+    if (open && turmaFixa && form.turma !== turmaFixa) {
+      handleTurmaChange(turmaFixa)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, turmaFixa])
 
   const handleTurmaChange = async (turma: string) => {
     setForm((f) => ({ ...f, turma, aluna_id: '' }))
@@ -207,16 +217,23 @@ function NovoAtendimentoDialog({
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Turma</label>
-            <Select value={form.turma} onValueChange={handleTurmaChange} required>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a turma..." />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(turmaLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {turmaFixa ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md border bg-muted text-sm font-medium">
+                {turmaLabels[turmaFixa] ?? turmaFixa}
+                <span className="text-xs text-muted-foreground">(seu núcleo)</span>
+              </div>
+            ) : (
+              <Select value={form.turma} onValueChange={handleTurmaChange} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a turma..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(turmaLabels).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="space-y-2">

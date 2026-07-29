@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import api from '@/lib/api/client'
 import { Presenca } from '@/lib/types'
 
 export interface ResumoChamadas {
@@ -20,9 +20,7 @@ export interface ResumoChamadas {
 }
 
 export async function getResumoChamadas(): Promise<ResumoChamadas> {
-  const registros = await pb.collection('presenca').getFullList<Presenca>({
-    sort: '-data_aula',
-  })
+  const registros = await api.get<Presenca[]>('/api/presencas')
 
   if (registros.length === 0) {
     return { totalAulas: 0, totalPresencas: 0, totalFaltas: 0, percentualGeral: 0, porTurma: [], ultimasAulas: [] }
@@ -45,8 +43,6 @@ export async function getResumoChamadas(): Promise<ResumoChamadas> {
     }
   })
 
-  // Agrupamento por turma — presenca não tem campo turma direto,
-  // usamos totalAulas = datas únicas de cada usuário
   const totalAulas = datasUnicas.length
 
   return {

@@ -1,5 +1,5 @@
-import pb from '@/lib/pocketbase/client'
-import { Atendimento, FichaInscricaoFF, TipoAcessoAtendimento } from '@/lib/types'
+import api from '@/lib/api/client'
+import { Atendimento, TipoAcessoAtendimento } from '@/lib/types'
 
 export interface AlunaOpcao {
   userId: string
@@ -17,35 +17,29 @@ export interface CriarAtendimentoData {
 }
 
 export const getAlunasPorTurma = async (turma: string): Promise<AlunaOpcao[]> => {
-  const fichas = await pb.collection('ficha_inscricao_ff').getFullList({
-    filter: `turma = "${turma}" && status = "APROVADA"`,
-    sort: 'nome_completo',
-  }) as unknown as FichaInscricaoFF[]
+  const alunas = await api.get<
+    { user_id: string; nome_completo: string; inscricao_id: string }[]
+  >(`/api/atendimentos/alunas?turma=${encodeURIComponent(turma)}`)
 
-  return fichas.map((f) => ({
-    userId: f.user_id,
-    nomeCompleto: f.nome_completo,
-    inscricaoId: f.id,
+  return alunas.map((a) => ({
+    userId: a.user_id,
+    nomeCompleto: a.nome_completo,
+    inscricaoId: a.inscricao_id,
   }))
 }
 
 export const getAtendimentos = async (): Promise<Atendimento[]> => {
-  return pb.collection('atendimentos').getFullList({
-    sort: '-data,-horario',
-    expand: 'created_by,aluna_id',
-  }) as unknown as Atendimento[]
+  return api.get<Atendimento[]>('/api/atendimentos')
 }
 
 export const criarAtendimento = async (
-  userId: string,
+  _userId: string,
   data: CriarAtendimentoData,
 ): Promise<Atendimento> => {
-  return pb.collection('atendimentos').create({
-    ...data,
-    created_by: userId,
-  }) as unknown as Atendimento
+  // O backend usa o usuário autenticado como created_by
+  return api.post<Atendimento>('/api/atendimentos', data)
 }
 
 export const deletarAtendimento = async (id: string): Promise<void> => {
-  await pb.collection('atendimentos').delete(id)
+  await api.delete(`/api/atendimentos/${id}`)
 }

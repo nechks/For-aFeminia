@@ -42,6 +42,13 @@ screenshot.png
 .eslintcache
 .oxlintcache
 
+# Backend Java e arquivos enviados localmente
+backend/target/
+backend/uploads/
+
+# Configurações locais de agentes
+.claude/
+
 # Environment variables
 .env*
 !.env

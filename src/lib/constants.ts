@@ -1,12 +1,7 @@
 import { StatusInscricao } from '@/lib/types'
 
-export const turmaLabels: Record<string, string> = {
-  CENTRO_VITORIA: 'Centro - Vitória',
-  AEST_SERRA: 'Clube AEST - Serra',
-  ITAQUARI_CARIACICA: 'Itaquari - Cariacica',
-  CONJUNTO_CARAPINA_SERRA: 'Conj. Carapina - Serra',
-  ATLANTICA_VILLE_VITORIA: 'Atlântica Ville - Vitória',
-}
+// Preenchido somente com os núcleos existentes no backend durante a inicialização.
+export const turmaLabels: Record<string, string> = {}
 
 export const statusInfo: Record<StatusInscricao, { label: string; color: string }> = {
   AGUARDANDO: { label: 'Aguardando', color: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },

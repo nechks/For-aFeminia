@@ -1,9 +1,10 @@
-# Projeto Criado com o Skip
+# Sistema ATKDGV — Módulo Força Feminina
 
-Este projeto foi criado de ponta a ponta com o [Skip](https://goskip.dev).
+Sistema de gestão do Projeto Social Força Feminina da Associação de Taekwondo da Grande Vitória.
 
 ## 🚀 Stack Tecnológica
 
+### Frontend
 - **React 19** - Biblioteca JavaScript para construção de interfaces
 - **Vite** - Build tool extremamente rápida
 - **TypeScript** - Superset tipado do JavaScript
@@ -14,16 +15,37 @@ Este projeto foi criado de ponta a ponta com o [Skip](https://goskip.dev).
 - **Zod** - Validação de schemas TypeScript-first
 - **Recharts** - Biblioteca de gráficos para React
 
+### Backend (`backend/`)
+- **Java 21 + Spring Boot 3** - API REST
+- **Spring Security + JWT** - Autenticação e RBAC por perfil
+- **Spring Data JPA / Hibernate** - Persistência
+- **MySQL 8** - Banco de dados local `sistemaforca` (user `root`, senha `root`)
+
 ## 📋 Pré-requisitos
 
 - Node.js 18+
 - npm
+- JDK 21 e Maven 3.9+
+- MySQL 8 rodando localmente (o banco `sistemaforca` é criado automaticamente)
 
 ## 🔧 Instalação
 
 ```bash
 npm install
 ```
+
+## ⚙️ Backend
+
+```bash
+# Subir a API (porta 8085)
+mvn -f backend/pom.xml spring-boot:run
+```
+
+Configuração do banco em [backend/src/main/resources/application.yml](backend/src/main/resources/application.yml).
+O frontend aponta para a API via `VITE_API_URL` no arquivo `.env` (padrão `http://localhost:8085`).
+
+Os dados de demonstração não são carregados por padrão. O perfil `seed` deve ser usado somente em
+ambientes descartáveis de desenvolvimento.
 
 ## 💻 Scripts Disponíveis
 

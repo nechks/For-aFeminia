@@ -7,7 +7,9 @@ import { AppProvider, useApp } from '@/store/app-context'
 import Index from './pages/Index'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import Inscricao from './pages/Inscricao'
+import CadastroProfessor from './pages/CadastroProfessor'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminInscricoes from './pages/admin/AdminInscricoes'
 import AdminUsuarios from './pages/admin/AdminUsuarios'
@@ -18,7 +20,16 @@ import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
 import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
 import Atendimentos from './pages/professor/Atendimentos'
+import Alertas from './pages/assistente/Alertas'
+import Eventos from './pages/eventos/Eventos'
+import Solicitacoes from './pages/solicitacoes/Solicitacoes'
 import GestaoDashboard from './pages/gestao/GestaoDashboard'
+import Relatorios from './pages/gestao/Relatorios'
+import Nucleos from './pages/gestao/Nucleos'
+import Projetos from './pages/gestao/Projetos'
+import { useEffect, useState } from 'react'
+import { getNucleos } from '@/services/nucleos'
+import { turmaLabels } from '@/lib/constants'
 
 const ProtectedRoute = ({
   children,
@@ -45,6 +56,7 @@ const AppRoutes = () => (
     <Route element={<Layout />}>
       <Route path="/" element={<Index />} />
       <Route path="/inscricao" element={<Inscricao />} />
+      <Route path="/cadastro-professor" element={<CadastroProfessor />} />
 
       <Route
         path="/admin/inscricoes"
@@ -54,10 +66,11 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       />
+      {/* Gestão Geral usa /gestao/dashboard (Indicadores); este é só do Administrativo. */}
       <Route
         path="/admin/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO']}>
             <AdminDashboardPage />
           </ProtectedRoute>
         }
@@ -87,6 +100,30 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/relatorios"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <Relatorios />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/nucleos"
+        element={
+          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+            <Nucleos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/projetos"
+        element={
+          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+            <Projetos />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/aluna/dashboard"
@@ -99,7 +136,15 @@ const AppRoutes = () => (
       <Route
         path="/aluna/perfil"
         element={
-          <ProtectedRoute allowedRoles={['ALUNA_FF', 'PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+          <ProtectedRoute
+            allowedRoles={[
+              'ALUNA_FF',
+              'PROFESSOR',
+              'ADMINISTRATIVO',
+              'ASSISTENTE_SOCIAL',
+              'GESTAO_GERAL',
+            ]}
+          >
             <PerfilAluna />
           </ProtectedRoute>
         }
@@ -132,8 +177,34 @@ const AppRoutes = () => (
       <Route
         path="/atendimentos"
         element={
-          <ProtectedRoute allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+          <ProtectedRoute
+            allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}
+          >
             <Atendimentos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/assistente/alertas"
+        element={
+          <ProtectedRoute allowedRoles={['ASSISTENTE_SOCIAL', 'ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <Alertas />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/eventos"
+        element={
+          <ProtectedRoute allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <Eventos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/solicitacoes"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}>
+            <Solicitacoes />
           </ProtectedRoute>
         }
       />
@@ -142,18 +213,50 @@ const AppRoutes = () => (
   </Routes>
 )
 
+/**
+ * Carrega os nomes dos núcleos vindos do backend sobre os rótulos padrão de
+ * `turmaLabels`. Os rótulos são cosméticos e já têm valores de fallback, então
+ * o app renderiza de imediato: bloquear aqui (`return null`) deixava a tela
+ * totalmente branca durante toda a requisição — e indefinidamente quando o
+ * backend estava reiniciando.
+ *
+ * `<AppRoutes />` é criado aqui dentro (em vez de recebido via `children`) para
+ * que o `setVersion` re-renderize a árvore e os rótulos novos apareçam, sem
+ * remontar as rotas nem refazer as requisições das páginas.
+ */
+function NucleosBootstrap() {
+  const [, setVersion] = useState(0)
+  useEffect(() => {
+    getNucleos()
+      .then((ns) => {
+        if (!Array.isArray(ns)) return
+        Object.keys(turmaLabels).forEach((codigo) => delete turmaLabels[codigo])
+        ns.filter((n) => n.ativo).forEach((n) => {
+          turmaLabels[n.codigo] = n.nome
+        })
+        setVersion((v) => v + 1)
+      })
+      .catch((err) => {
+        console.error('Falha ao carregar núcleos; usando rótulos padrão.', err)
+      })
+  }, [])
+  return <AppRoutes />
+}
+
 const App = () => (
-  <BrowserRouter>
-    <AuthProvider>
-      <AppProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AppRoutes />
-        </TooltipProvider>
-      </AppProvider>
-    </AuthProvider>
-  </BrowserRouter>
+  <ErrorBoundary>
+    <BrowserRouter>
+      <AuthProvider>
+        <AppProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <NucleosBootstrap />
+          </TooltipProvider>
+        </AppProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  </ErrorBoundary>
 )
 
 export default App

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Shield } from 'lucide-react'
-import { getErrorMessage } from '@/lib/pocketbase/errors'
+import { getErrorMessage } from '@/lib/api/errors'
 
 export default function Index() {
   const { user, isAuthenticated, authLoading, login } = useApp()
@@ -116,6 +116,12 @@ export default function Index() {
                 Entrar
               </Button>
             </form>
+            <p className="mt-4 text-sm text-center text-muted-foreground">
+              É da equipe?{' '}
+              <Link to="/cadastro-professor" className="font-medium text-primary hover:underline">
+                Cadastre-se como professor(a)
+              </Link>
+            </p>
             <div className="mt-4 text-xs text-muted-foreground font-mono bg-muted p-3 rounded">
               <p className="font-semibold mb-1">Contas de teste (senha: Skip@Pass):</p>
               <p>andiaracaneo10@gmail.com — Admin</p>

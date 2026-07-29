@@ -1,21 +1,20 @@
 import { useEffect, useRef } from 'react'
-import type { RecordModel, RecordSubscription } from 'pocketbase'
 
-import pb from '@/lib/pocketbase/client'
+const POLL_INTERVAL_MS = 10_000
+
+export interface RealtimeEvent<TRecord = Record<string, unknown>> {
+  action: string
+  record: TRecord
+}
 
 /**
- * Hook for real-time subscriptions to a PocketBase collection.
- * ALWAYS use this hook instead of subscribing inline.
- * Uses the per-listener UnsubscribeFunc so multiple components
- * can safely subscribe to the same collection without conflicts.
- *
- * Generic over the record type: pass your collection's interface as
- * `useRealtime<MyRecord>(...)` to get a typed subscription payload
- * instead of `unknown`.
+ * A API REST (Spring Boot) não possui push de eventos como o antigo PocketBase.
+ * Este hook mantém a mesma assinatura das telas, mas atualiza por polling:
+ * o callback é chamado periodicamente para recarregar os dados.
  */
-export function useRealtime<TRecord extends RecordModel = RecordModel>(
+export function useRealtime<TRecord = Record<string, unknown>>(
   collectionName: string,
-  callback: (data: RecordSubscription<TRecord>) => void,
+  callback: (data: RealtimeEvent<TRecord>) => void,
   enabled: boolean = true,
 ) {
   const callbackRef = useRef(callback)
@@ -24,28 +23,11 @@ export function useRealtime<TRecord extends RecordModel = RecordModel>(
   useEffect(() => {
     if (!enabled) return
 
-    let unsubscribeFn: (() => Promise<void>) | undefined
-    let cancelled = false
+    const id = setInterval(() => {
+      callbackRef.current({ action: 'refresh', record: {} as TRecord })
+    }, POLL_INTERVAL_MS)
 
-    pb.collection<TRecord>(collectionName)
-      .subscribe('*', (e) => {
-        callbackRef.current(e)
-      })
-      .then((fn) => {
-        if (cancelled) {
-          fn().catch(() => {})
-        } else {
-          unsubscribeFn = fn
-        }
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-      if (unsubscribeFn) {
-        unsubscribeFn().catch(() => {})
-      }
-    }
+    return () => clearInterval(id)
   }, [collectionName, enabled])
 }
 

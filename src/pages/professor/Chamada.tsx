@@ -25,11 +25,17 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/use-toast'
-import { Save, Loader2 } from 'lucide-react'
+import { Save, Loader2, Check, X, MessageSquareText } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { turmaLabels } from '@/lib/constants'
+
+type StatusChamada = 'PRESENCA' | 'FALTA' | 'JUSTIFICADO' | null
+
+interface RegistroChamadaState {
+  status: StatusChamada
+  observacao: string
+}
 
 export default function Chamada() {
   const { user } = useApp()
@@ -39,9 +45,7 @@ export default function Chamada() {
   const [alunos, setAlunos] = useState<PresencaAluno[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [chamadaState, setChamadaState] = useState<
-    Record<string, { presente: boolean; justificativa: string }>
-  >({})
+  const [chamadaState, setChamadaState] = useState<Record<string, RegistroChamadaState>>({})
 
   const loadData = useCallback(async () => {
     if (!turma || !dataAula) return
@@ -49,11 +53,18 @@ export default function Chamada() {
     try {
       const result = await getPresencasTurma(turma, dataAula)
       setAlunos(result.alunos)
-      const state: Record<string, { presente: boolean; justificativa: string }> = {}
+      const state: Record<string, RegistroChamadaState> = {}
       result.alunos.forEach((a) => {
+        const justificativa = a.presenca?.justificativa ?? ''
         state[a.user_id] = {
-          presente: a.presenca?.presente ?? false,
-          justificativa: a.presenca?.justificativa ?? '',
+          status: !a.presenca
+            ? null
+            : a.presenca.presente
+              ? 'PRESENCA'
+              : a.presenca.justificada
+                ? 'JUSTIFICADO'
+                : 'FALTA',
+          observacao: justificativa,
         }
       })
       setChamadaState(state)
@@ -73,29 +84,54 @@ export default function Chamada() {
     loadData()
   })
 
-  const handleToggle = (userId: string, checked: boolean) => {
+  const handlePresenca = (userId: string) => {
     setChamadaState((prev) => ({
       ...prev,
-      [userId]: { ...prev[userId], presente: checked },
+      [userId]: { status: 'PRESENCA', observacao: prev[userId]?.observacao ?? '' },
     }))
   }
 
-  const handleJustificativa = (userId: string, value: string) => {
+  const handleFalta = (userId: string) => {
     setChamadaState((prev) => ({
       ...prev,
-      [userId]: { ...prev[userId], justificativa: value },
+      [userId]: { status: 'FALTA', observacao: prev[userId]?.observacao ?? '' },
+    }))
+  }
+
+  const handleJustificado = (userId: string) => {
+    setChamadaState((prev) => ({
+      ...prev,
+      [userId]: { status: 'JUSTIFICADO', observacao: prev[userId]?.observacao ?? '' },
+    }))
+  }
+
+  const handleObservacao = (userId: string, value: string) => {
+    setChamadaState((prev) => ({
+      ...prev,
+      [userId]: { ...prev[userId], observacao: value },
     }))
   }
 
   const handleSave = async () => {
+    const pendentes = alunos.filter((a) => !chamadaState[a.user_id]?.status)
+    if (pendentes.length > 0) {
+      toast({
+        title: 'Chamada incompleta',
+        description: `Marque Presença, Falta ou Justificado para todas as alunas. Faltam ${pendentes.length}.`,
+        variant: 'destructive',
+      })
+      return
+    }
+
     setSaving(true)
     try {
       const registros: RegistroPresenca[] = alunos.map((a) => ({
         user_id: a.user_id,
-        presente: chamadaState[a.user_id]?.presente ?? false,
-        justificativa: chamadaState[a.user_id]?.justificativa ?? '',
+        presente: chamadaState[a.user_id]?.status === 'PRESENCA',
+        justificada: chamadaState[a.user_id]?.status === 'JUSTIFICADO',
+        justificativa: chamadaState[a.user_id]?.observacao.trim() ?? '',
       }))
-      await registrarPresencas(dataAula, registros)
+      await registrarPresencas(dataAula, registros, turma)
       toast({
         title: 'Chamada Salva!',
         description: `Presenças registradas para ${new Date(dataAula).toLocaleDateString('pt-BR')}`,
@@ -109,7 +145,12 @@ export default function Chamada() {
     }
   }
 
-  const presentesCount = Object.values(chamadaState).filter((s) => s.presente).length
+  const presentesCount = Object.values(chamadaState).filter((s) => s.status === 'PRESENCA').length
+  const faltasCount = Object.values(chamadaState).filter((s) => s.status === 'FALTA').length
+  const justificadosCount = Object.values(chamadaState).filter(
+    (s) => s.status === 'JUSTIFICADO',
+  ).length
+  const pendentesCount = alunos.length - presentesCount - faltasCount - justificadosCount
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -164,7 +205,13 @@ export default function Chamada() {
               Presentes: <strong>{presentesCount}</strong>
             </span>
             <span className="text-rose-600">
-              Ausentes: <strong>{alunos.length - presentesCount}</strong>
+              Faltas: <strong>{faltasCount}</strong>
+            </span>
+            <span className="text-amber-600">
+              Justificadas: <strong>{justificadosCount}</strong>
+            </span>
+            <span className="text-muted-foreground">
+              Pendentes: <strong>{pendentesCount}</strong>
             </span>
           </div>
 
@@ -173,49 +220,74 @@ export default function Chamada() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Aluna</TableHead>
-                  <TableHead className="text-center">Presença</TableHead>
-                  <TableHead>Justificativa</TableHead>
+                  <TableHead className="text-center">Registro</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="h-24 text-center">
+                    <TableCell colSpan={2} className="h-24 text-center">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : alunos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={2} className="h-24 text-center text-muted-foreground">
                       Nenhuma aluna aprovada nesta turma.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  alunos.map((aluna) => (
-                    <TableRow key={aluna.user_id}>
-                      <TableCell className="font-medium">{aluna.nome_completo}</TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-sm text-muted-foreground mr-2">
-                            {chamadaState[aluna.user_id]?.presente ? 'Presente' : 'Falta'}
-                          </span>
-                          <Switch
-                            checked={chamadaState[aluna.user_id]?.presente ?? false}
-                            onCheckedChange={(c) => handleToggle(aluna.user_id, c)}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Textarea
-                          placeholder="Justificativa (opcional)"
-                          className="min-h-[36px] text-sm"
-                          value={chamadaState[aluna.user_id]?.justificativa ?? ''}
-                          onChange={(e) => handleJustificativa(aluna.user_id, e.target.value)}
-                          disabled={chamadaState[aluna.user_id]?.presente}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  alunos.map((aluna) => {
+                    const estado = chamadaState[aluna.user_id]
+                    const status = estado?.status ?? null
+                    return (
+                      <TableRow key={aluna.user_id}>
+                        <TableCell className="font-medium">{aluna.nome_completo}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center gap-2 flex-wrap xl:flex-nowrap">
+                            <Button
+                              type="button"
+                              variant={status === 'PRESENCA' ? 'default' : 'outline'}
+                              className={cn(
+                                'h-10 w-28 gap-1.5',
+                                status === 'PRESENCA' &&
+                                  'bg-emerald-600 hover:bg-emerald-700 text-white',
+                              )}
+                              onClick={() => handlePresenca(aluna.user_id)}
+                            >
+                              <Check className="w-4 h-4" /> Presença
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={status === 'FALTA' ? 'default' : 'outline'}
+                              className={cn(
+                                'h-10 w-28 gap-1.5',
+                                status === 'FALTA' && 'bg-rose-600 hover:bg-rose-700 text-white',
+                              )}
+                              onClick={() => handleFalta(aluna.user_id)}
+                            >
+                              <X className="w-4 h-4" /> Falta
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={status === 'JUSTIFICADO' ? 'default' : 'outline'}
+                              className="h-10 w-32 gap-1.5"
+                              onClick={() => handleJustificado(aluna.user_id)}
+                            >
+                              <MessageSquareText className="w-4 h-4" /> Justificado
+                            </Button>
+                            <Input
+                              aria-label={`Observação de ${aluna.nome_completo}`}
+                              placeholder="Observação"
+                              className="h-10 min-w-[180px] flex-1"
+                              value={estado?.observacao ?? ''}
+                              onChange={(e) => handleObservacao(aluna.user_id, e.target.value)}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
               </TableBody>
             </Table>
@@ -224,7 +296,7 @@ export default function Chamada() {
           <div className="mt-6 flex justify-end">
             <Button
               onClick={handleSave}
-              disabled={saving || alunos.length === 0}
+              disabled={saving || alunos.length === 0 || pendentesCount > 0}
               className="bg-primary text-primary-foreground gap-2"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}

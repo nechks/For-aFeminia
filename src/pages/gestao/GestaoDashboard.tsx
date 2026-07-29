@@ -1,20 +1,72 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { getIndicadores, type IndicadoresData } from '@/services/indicadores'
 import { getResumoChamadas, type ResumoChamadas } from '@/services/chamadas-resumo'
+import { getInscricoesPaginated } from '@/services/ficha-inscricao'
+import { getPresencasDetalhes, type PresencaDetalhe } from '@/services/presenca'
+import { FichaInscricaoFF } from '@/lib/types'
 import { useRealtime } from '@/hooks/use-realtime'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend, Tooltip } from 'recharts'
-import { Users, TrendingDown, FileText, AlertCircle, Loader2, CalendarDays, UserCheck, UserX } from 'lucide-react'
-import { turmaLabels, statusInfo } from '@/lib/constants'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Legend } from 'recharts'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Users, TrendingDown, FileText, AlertCircle, Loader2, CalendarDays, UserCheck, UserX, ArrowRight } from 'lucide-react'
+import { turmaLabels, statusInfo, getStatusInfo } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
 
 const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#f43f5e']
+
+type DialogAberto = 'inscricoes' | 'presencas' | 'faltas' | null
 
 export default function GestaoDashboard() {
   const [data, setData] = useState<IndicadoresData | null>(null)
   const [chamadas, setChamadas] = useState<ResumoChamadas | null>(null)
   const [loading, setLoading] = useState(true)
+  const [dialogAberto, setDialogAberto] = useState<DialogAberto>(null)
+  const [aguardando, setAguardando] = useState<FichaInscricaoFF[]>([])
+  const [detalhes, setDetalhes] = useState<PresencaDetalhe[]>([])
+  const [loadingDialog, setLoadingDialog] = useState(false)
+
+  const abrirInscricoes = async () => {
+    setDialogAberto('inscricoes')
+    setLoadingDialog(true)
+    try {
+      const result = await getInscricoesPaginated({ status: 'AGUARDANDO', perPage: 100 })
+      setAguardando(result.items)
+    } catch {
+      toast({ title: 'Erro ao carregar inscrições', variant: 'destructive' })
+    } finally {
+      setLoadingDialog(false)
+    }
+  }
+
+  const abrirPresencas = async (presente: boolean) => {
+    setDialogAberto(presente ? 'presencas' : 'faltas')
+    setLoadingDialog(true)
+    try {
+      setDetalhes(await getPresencasDetalhes(presente))
+    } catch {
+      toast({ title: 'Erro ao carregar registros', variant: 'destructive' })
+    } finally {
+      setLoadingDialog(false)
+    }
+  }
 
   const loadData = useCallback(async () => {
     try {
@@ -74,50 +126,65 @@ export default function GestaoDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Painel de Gestão Geral</h1>
-        <p className="text-muted-foreground mt-1">
-          Indicadores estratégicos do Projeto Força Feminina IV.
-        </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Painel de Gestão Geral</h1>
+          <p className="text-muted-foreground mt-1">
+            Indicadores estratégicos do Projeto Força Feminina IV.
+          </p>
+        </div>
+        <Button asChild className="gap-2 shrink-0">
+          <Link to="/admin/inscricoes">
+            Aprovar Alunas <ArrowRight className="w-4 h-4" />
+          </Link>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          {
-            label: 'Total de Alunas',
-            value: data.totalStudents,
-            icon: Users,
-            color: 'text-indigo-500',
-          },
-          {
-            label: 'Total de Inscrições',
-            value: data.totalInscricoes,
-            icon: FileText,
-            color: 'text-sky-500',
-          },
-          {
-            label: 'Taxa de Evasão',
-            value: `${data.dropoutRate}%`,
-            icon: TrendingDown,
-            color: 'text-rose-500',
-          },
-          {
-            label: 'Cancelamentos',
-            value: data.canceladas,
-            icon: AlertCircle,
-            color: 'text-amber-500',
-          },
-        ].map((s) => (
-          <Card key={s.label}>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm font-medium">{s.label}</CardTitle>
-              <s.icon className={`h-4 w-4 ${s.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{s.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Total de Alunas</CardTitle>
+            <Users className="h-4 w-4 text-indigo-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.totalStudents}</div>
+            <p className="text-xs text-muted-foreground mt-1">aprovadas e ativas</p>
+          </CardContent>
+        </Card>
+        <Card
+          className="cursor-pointer transition-shadow hover:shadow-md"
+          role="button"
+          onClick={abrirInscricoes}
+        >
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Total de Inscrições</CardTitle>
+            <FileText className="h-4 w-4 text-sky-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.totalInscricoes}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {data.aguardandoAprovacao} aguardando aprovação · clique para ver
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Taxa de Evasão</CardTitle>
+            <TrendingDown className="h-4 w-4 text-rose-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.dropoutRate}%</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium">Cancelamentos</CardTitle>
+            <AlertCircle className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.canceladas}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Resumo de Chamadas */}
@@ -135,22 +202,32 @@ export default function GestaoDashboard() {
               <div className="text-2xl font-bold">{chamadas?.totalAulas ?? '—'}</div>
             </CardContent>
           </Card>
-          <Card>
+          <Card
+            className="cursor-pointer transition-shadow hover:shadow-md"
+            role="button"
+            onClick={() => abrirPresencas(true)}
+          >
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-medium">Presenças Registradas</CardTitle>
               <UserCheck className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-emerald-600">{chamadas?.totalPresencas ?? '—'}</div>
+              <p className="text-xs text-muted-foreground mt-1">clique para ver a lista</p>
             </CardContent>
           </Card>
-          <Card>
+          <Card
+            className="cursor-pointer transition-shadow hover:shadow-md"
+            role="button"
+            onClick={() => abrirPresencas(false)}
+          >
             <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-medium">Faltas Registradas</CardTitle>
               <UserX className="h-4 w-4 text-rose-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-rose-600">{chamadas?.totalFaltas ?? '—'}</div>
+              <p className="text-xs text-muted-foreground mt-1">clique para ver a lista</p>
             </CardContent>
           </Card>
         </div>
@@ -297,6 +374,120 @@ export default function GestaoDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog: inscrições aguardando aprovação */}
+      <Dialog open={dialogAberto === 'inscricoes'} onOpenChange={(o) => !o && setDialogAberto(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Inscrições Aguardando Aprovação</DialogTitle>
+            <DialogDescription>
+              Alunas que se inscreveram e ainda não foram analisadas.
+            </DialogDescription>
+          </DialogHeader>
+          {loadingDialog ? (
+            <Loader2 className="h-6 w-6 animate-spin mx-auto my-8 text-muted-foreground" />
+          ) : aguardando.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Nenhuma inscrição aguardando aprovação.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Turma</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {aguardando.map((i) => (
+                  <TableRow key={i.id}>
+                    <TableCell className="font-medium">{i.nome_completo}</TableCell>
+                    <TableCell>{turmaLabels[i.turma ?? ''] ?? i.turma ?? '—'}</TableCell>
+                    <TableCell>
+                      {i.created ? new Date(i.created).toLocaleDateString('pt-BR') : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusInfo(i.status).color} variant="secondary">
+                        {getStatusInfo(i.status).label}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          <div className="flex justify-end">
+            <Button asChild className="gap-2">
+              <Link to="/admin/inscricoes">
+                Ir para Aprovação <ArrowRight className="w-4 h-4" />
+              </Link>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: presenças/faltas detalhadas */}
+      <Dialog
+        open={dialogAberto === 'presencas' || dialogAberto === 'faltas'}
+        onOpenChange={(o) => !o && setDialogAberto(null)}
+      >
+        <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {dialogAberto === 'presencas' ? 'Presenças Registradas' : 'Faltas Registradas'}
+            </DialogTitle>
+            <DialogDescription>
+              {dialogAberto === 'presencas'
+                ? 'Alunas com presença registrada nas chamadas.'
+                : 'Alunas com falta registrada, incluindo justificativas.'}
+            </DialogDescription>
+          </DialogHeader>
+          {loadingDialog ? (
+            <Loader2 className="h-6 w-6 animate-spin mx-auto my-8 text-muted-foreground" />
+          ) : detalhes.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Nenhum registro encontrado.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Aluna</TableHead>
+                  <TableHead>Núcleo</TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Professor(a)</TableHead>
+                  {dialogAberto === 'faltas' && <TableHead>Justificativa</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detalhes.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell className="font-medium">{d.aluna_nome}</TableCell>
+                    <TableCell>{turmaLabels[d.turma] ?? d.turma ?? '—'}</TableCell>
+                    <TableCell>
+                      {new Date(d.data_aula + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </TableCell>
+                    <TableCell>{d.professor_nome || '—'}</TableCell>
+                    {dialogAberto === 'faltas' && (
+                      <TableCell>
+                        {d.justificativa ? (
+                          <span className="text-sm">{d.justificativa}</span>
+                        ) : (
+                          <Badge variant="secondary" className="bg-rose-100 text-rose-800 hover:bg-rose-100">
+                            Sem justificativa
+                          </Badge>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

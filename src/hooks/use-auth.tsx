@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import pb from '@/lib/pocketbase/client'
+import api, { authStore } from '@/lib/api/client'
 import { Usuario, PerfilUsuario } from '@/lib/types'
 
 interface AuthContextType {
@@ -20,24 +20,22 @@ export const useAuth = () => {
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<Usuario | null>(
-    pb.authStore.isValid ? (pb.authStore.record as unknown as Usuario) : null,
-  )
-  const [isAuthenticated, setIsAuthenticated] = useState(pb.authStore.isValid)
+  const [user, setUser] = useState<Usuario | null>(authStore.user)
+  const [isAuthenticated, setIsAuthenticated] = useState(authStore.isValid)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = pb.authStore.onChange((_token, record) => {
-      setUser(pb.authStore.isValid ? (record as unknown as Usuario) : null)
-      setIsAuthenticated(pb.authStore.isValid)
+    const unsubscribe = authStore.onChange((_token, record) => {
+      setUser(record)
+      setIsAuthenticated(authStore.isValid)
     })
-    if (pb.authStore.isValid) {
-      pb.collection('users')
-        .authRefresh()
-        .catch(() => pb.authStore.clear())
+    if (authStore.isValid) {
+      api
+        .get<Usuario>('/api/auth/me')
+        .then((me) => authStore.setUser(me))
+        .catch(() => authStore.clear())
         .finally(() => setLoading(false))
     } else {
-      if (pb.authStore.record) pb.authStore.clear()
       setLoading(false)
     }
     return () => {
@@ -47,15 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (name: string, email: string, password: string, perfil: PerfilUsuario = 'ALUNA_FF', turma?: string) => {
     try {
-      await pb.collection('users').create({
-        name,
-        email,
-        password,
-        passwordConfirm: password,
-        perfil,
-        turma: turma ?? null,
-        ativo: true,
-      })
+      await api.post('/api/auth/register', { name, email, password, perfil, turma: turma ?? null })
       return { error: null }
     } catch (error) {
       return { error }
@@ -64,11 +54,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const result = await pb.collection('users').authWithPassword(email, password)
-      if (result.record?.ativo === false) {
-        pb.authStore.clear()
-        return { error: { message: 'Conta inativa. Contate o administrador.' } }
-      }
+      const result = await api.post<{ token: string; user: Usuario }>('/api/auth/login', {
+        email,
+        password,
+      })
+      authStore.save(result.token, result.user)
       return { error: null }
     } catch (error) {
       return { error }
@@ -76,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const signOut = () => {
-    pb.authStore.clear()
+    authStore.clear()
   }
 
   return (

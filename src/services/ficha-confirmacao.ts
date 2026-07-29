@@ -1,37 +1,28 @@
-import pb from '@/lib/pocketbase/client'
+import api from '@/lib/api/client'
 import { FichaConfirmacaoFF, DocumentosAnexos } from '@/lib/types'
 
 export const submitConfirmacao = async (formData: FormData): Promise<any> => {
-  const res = await fetch(`${import.meta.env.VITE_POCKETBASE_URL}/backend/v1/confirmacao`, {
-    method: 'POST',
-    headers: { Authorization: pb.authStore.token },
-    body: formData,
-  })
-  const data = await res.json()
-  if (!res.ok) throw data
-  return data
+  return api.postForm('/api/confirmacao', formData)
 }
 
-export const getMinhaConfirmacao = async (userId: string): Promise<FichaConfirmacaoFF | null> => {
+export const getMinhaConfirmacao = async (_userId: string): Promise<FichaConfirmacaoFF | null> => {
   try {
-    return await pb.collection('ficha_confirmacao_ff').getFirstListItem(`user_id = "${userId}"`)
+    return await api.get<FichaConfirmacaoFF | null>('/api/confirmacoes/minha')
   } catch {
     return null
   }
 }
 
 export const getConfirmacoes = async (): Promise<FichaConfirmacaoFF[]> => {
-  return await pb.collection('ficha_confirmacao_ff').getFullList({ sort: '-created' })
+  return api.get<FichaConfirmacaoFF[]>('/api/confirmacoes')
 }
 
 export const getConfirmacao = async (id: string): Promise<FichaConfirmacaoFF> => {
-  return await pb.collection('ficha_confirmacao_ff').getOne(id)
+  return api.get<FichaConfirmacaoFF>(`/api/confirmacoes/${id}`)
 }
 
 export const getDocumentos = async (confirmacaoId: string): Promise<DocumentosAnexos[]> => {
-  return await pb.collection('documentos_anexos').getFullList({
-    filter: `confirmacao_id = "${confirmacaoId}"`,
-  })
+  return api.get<DocumentosAnexos[]>(`/api/confirmacoes/${confirmacaoId}/documentos`)
 }
 
 export const updateSecaoConfidencial = async (
@@ -39,5 +30,5 @@ export const updateSecaoConfidencial = async (
   secao: 'secao_6_socioeconomico' | 'secao_7_violencia',
   data: Record<string, unknown>,
 ): Promise<FichaConfirmacaoFF> => {
-  return await pb.collection('ficha_confirmacao_ff').update(id, { [secao]: data })
+  return api.patch<FichaConfirmacaoFF>(`/api/confirmacoes/${id}/secao`, { secao, dados: data })
 }
