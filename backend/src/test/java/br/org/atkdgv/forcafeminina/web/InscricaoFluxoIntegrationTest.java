@@ -22,8 +22,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
- * Fluxo inscrição → aprovação: a candidata cria o login na inscrição pública, a conta nasce
- * inativa (mensagem "em análise" no login) e é liberada automaticamente quando aprovada.
+ * Fluxo inscrição → aprovação: a candidata cria o login na inscrição pública e já entra no
+ * sistema (o gating do frontend limita a Perfil/Ficha até a aprovação). Reprovar ou cancelar
+ * bloqueia o acesso.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -60,6 +61,7 @@ class InscricaoFluxoIntegrationTest {
           "telefone": "27999998888",
           "email": "%s",
           "password": "%s",
+          "periodo_preferido": "NOITE",
           "endereco": "Rua Teste, 10",
           "bairro": "Centro",
           "cidade": "Vitoria",
@@ -96,7 +98,7 @@ class InscricaoFluxoIntegrationTest {
   }
 
   @Test
-  void inscricaoCriaContaInativaComLoginBloqueadoAteAprovacao() throws Exception {
+  void inscricaoCriaContaAtivaQueJaPodeEntrarNoSistema() throws Exception {
     String email = "candidata1@teste.com";
     mvc.perform(
             post("/api/inscricao/forca-feminina")
@@ -107,15 +109,10 @@ class InscricaoFluxoIntegrationTest {
         .andExpect(jsonPath("$.email").value(email));
 
     Usuario conta = usuarios.findByEmailIgnoreCase(email).orElseThrow();
-    assertThat(conta.isAtivo()).isFalse();
     assertThat(conta.getPerfil()).isEqualTo(Perfil.ALUNA_FF);
-
-    mvc.perform(
-            post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"email\":\"" + email + "\",\"password\":\"" + SENHA + "\"}"))
-        .andExpect(status().isForbidden())
-        .andExpect(jsonPath("$.error").value("inscricao_pendente"));
+    // Conta nasce ativa: o gating do frontend limita o acesso a Perfil/Ficha até a aprovação.
+    assertThat(conta.isAtivo()).isTrue();
+    loginToken(email, SENHA);
   }
 
   @Test

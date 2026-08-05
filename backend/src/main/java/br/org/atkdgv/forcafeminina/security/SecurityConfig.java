@@ -49,6 +49,10 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/profissoes")
                     .permitAll()
+                    // Lista enxuta de núcleos (código, nome e períodos com turma) para a
+                    // candidata escolher onde quer estudar antes de ter login.
+                    .requestMatchers(HttpMethod.GET, "/api/nucleos/publicos")
+                    .permitAll()
                     // Arquivos (documentos de inscrição, avatares) contêm dados pessoais
                     // sensíveis e exigem autenticação — via header ou ?token= (imagens <img>).
                     .requestMatchers("/api/**")

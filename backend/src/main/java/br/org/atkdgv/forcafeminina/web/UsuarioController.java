@@ -66,10 +66,26 @@ public class UsuarioController {
     this.nucleos = nucleos;
   }
 
+  /** Aceita um perfil ou vários separados por vírgula (ex.: {@code PROFESSOR,ASSISTENTE_SOCIAL}). */
   @GetMapping
   public List<Usuario> list(@RequestParam("perfil") String perfil) {
     CurrentUser.require(Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
-    return usuarios.findByPerfilOrderByNameAsc(Perfil.valueOf(perfil)).stream()
+    List<Perfil> perfis;
+    try {
+      perfis =
+          java.util.Arrays.stream(perfil.split(","))
+              .map(String::trim)
+              .filter(p -> !p.isEmpty())
+              .map(Perfil::valueOf)
+              .distinct()
+              .toList();
+    } catch (IllegalArgumentException e) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, "perfil_invalido", "Perfil desconhecido.");
+    }
+    if (perfis.isEmpty()) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, "perfil_invalido", "Informe ao menos um perfil.");
+    }
+    return usuarios.findByPerfilInOrderByNameAsc(perfis).stream()
         .filter(u -> !u.isExcluido())
         .toList();
   }
@@ -180,7 +196,10 @@ public class UsuarioController {
       throw new ApiException(HttpStatus.CONFLICT, "mesmo_nucleo", "A aluna já pertence a este núcleo.");
     }
     aluna.setTurma(req.turma());
+    // A turma antiga é de outro núcleo: a aluna volta para "sem turma" e é realocada lá.
+    aluna.setTurmaId(null);
     ficha.setTurma(req.turma());
+    ficha.setTurmaId(null);
     fichas.save(ficha);
     confirmacoes.findByUserId(id).ifPresent(conf -> atualizarTurmaConfirmacao(conf, req.turma()));
     return usuarios.save(aluna);

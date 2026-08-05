@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -34,7 +35,8 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Shield, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
-import { turmaLabels } from '@/lib/constants'
+import { turnos } from '@/lib/turmas'
+import { getNucleosPublicos, type NucleoPublico } from '@/services/nucleos'
 import { getErrorMessage, extractFieldErrors } from '@/lib/api/errors'
 
 // Em qual passo do formulário cada campo aparece — para levar a usuária de volta ao erro.
@@ -50,6 +52,7 @@ const fieldStep: Record<string, number> = {
   cidade: 2,
   estado: 2,
   turma: 3,
+  periodo_preferido: 3,
   email: 4,
   password: 4,
   aceite_lgpd: 4,
@@ -84,7 +87,8 @@ const formSchema = z
     bairro: z.string().min(1, 'Obrigatório'),
     cidade: z.string().min(1, 'Obrigatório'),
     estado: z.string().min(2, 'Obrigatório'),
-    turma: z.string().min(1, 'Selecione uma turma'),
+    turma: z.string().min(1, 'Selecione um núcleo'),
+    periodo_preferido: z.string().min(1, 'Selecione o período'),
     email: z.string().email('E-mail inválido'),
     password: z.string().min(8, 'A senha deve ter pelo menos 8 caracteres'),
     confirmar_senha: z.string(),
@@ -98,6 +102,7 @@ const formSchema = z
 export default function Inscricao() {
   const [step, setStep] = useState(1)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [nucleos, setNucleos] = useState<NucleoPublico[]>([])
   const [buscandoCep, setBuscandoCep] = useState(false)
   const totalSteps = 4
 
@@ -116,12 +121,32 @@ export default function Inscricao() {
       cidade: '',
       estado: '',
       turma: '',
+      periodo_preferido: '',
       email: '',
       password: '',
       confirmar_senha: '',
       aceite_lgpd: false,
     },
   })
+
+  useEffect(() => {
+    getNucleosPublicos()
+      .then(setNucleos)
+      .catch(() =>
+        toast({
+          title: 'Não foi possível carregar os núcleos',
+          description: 'Recarregue a página para escolher onde deseja estudar.',
+          variant: 'destructive',
+        }),
+      )
+  }, [])
+
+  const nucleoEscolhido = form.watch('turma')
+  // Só oferece períodos que têm turma aberta no núcleo escolhido; sem núcleo, nada a escolher.
+  const turnosDisponiveis = useMemo(() => {
+    const doNucleo = nucleos.find((n) => n.codigo === nucleoEscolhido)?.turnos ?? []
+    return turnos.filter(([valor]) => doNucleo.includes(valor))
+  }, [nucleos, nucleoEscolhido])
 
   const handleCepChange = async (raw: string, onChange: (v: string) => void) => {
     const masked = formatCep(raw)
@@ -169,7 +194,7 @@ export default function Inscricao() {
     const fields: Record<number, string[]> = {
       1: ['nome_completo', 'data_nascimento', 'cpf', 'telefone'],
       2: ['cep', 'rua', 'numero', 'bairro', 'cidade', 'estado'],
-      3: ['turma'],
+      3: ['turma', 'periodo_preferido'],
       4: ['email', 'password', 'confirmar_senha'],
     }
     const isValid = await form.trigger(fields[step] as any)
@@ -404,28 +429,76 @@ export default function Inscricao() {
 
               {step === 3 && (
                 <div className="space-y-5 animate-slide-up">
-                  <h2 className="text-xl font-semibold mb-4">Seleção de Turma</h2>
+                  <h2 className="text-xl font-semibold mb-4">Núcleo e Período</h2>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Escolha o local e horário que melhor se adapta à sua rotina.
+                    Escolha o local e o período que melhor se adaptam à sua rotina.
                   </p>
                   <FormField
                     control={form.control}
                     name="turma"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Turma Desejada</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormLabel>Núcleo Desejado</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            field.onChange(v)
+                            // O período depende do núcleo: trocar de núcleo invalida a escolha.
+                            form.setValue('periodo_preferido', '')
+                          }}
+                        >
                           <FormControl>
                             <SelectTrigger className="h-14 bg-muted/20">
                               <SelectValue placeholder="Selecione um núcleo" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {Object.entries(turmaLabels).map(([codigo, nome]) => (
-                              <SelectItem key={codigo} value={codigo}>{nome}</SelectItem>
+                            {nucleos.map((n) => (
+                              <SelectItem key={n.codigo} value={n.codigo}>
+                                {n.nome}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="periodo_preferido"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Período Desejado</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                          disabled={!nucleoEscolhido || turnosDisponiveis.length === 0}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-14 bg-muted/20">
+                              <SelectValue
+                                placeholder={
+                                  nucleoEscolhido
+                                    ? 'Selecione o período'
+                                    : 'Escolha o núcleo primeiro'
+                                }
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {turnosDisponiveis.map(([valor, label]) => (
+                              <SelectItem key={valor} value={valor}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription>
+                          {nucleoEscolhido && turnosDisponiveis.length === 0
+                            ? 'Este núcleo ainda não tem turmas abertas. Escolha outro núcleo ou tente novamente mais tarde.'
+                            : 'A turma e os dias de aula são definidos pela equipe na aprovação da sua inscrição, respeitando o período que você escolher.'}
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

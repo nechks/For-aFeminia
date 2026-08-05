@@ -19,7 +19,12 @@ public interface FichaInscricaoRepository extends JpaRepository<FichaInscricao, 
   List<FichaInscricao> findByTurmaAndStatusOrderByNomeCompletoAsc(
       String turma, StatusInscricao status);
 
+  List<FichaInscricao> findByTurmaIdAndStatusOrderByNomeCompletoAsc(
+      String turmaId, StatusInscricao status);
+
   List<FichaInscricao> findByStatus(StatusInscricao status);
+
+  boolean existsByTurmaId(String turmaId);
 
   boolean existsByCpfAndStatusNot(String cpf, StatusInscricao status);
 

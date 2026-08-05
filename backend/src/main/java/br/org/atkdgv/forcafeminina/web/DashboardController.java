@@ -4,13 +4,17 @@ import br.org.atkdgv.forcafeminina.domain.FichaConfirmacao;
 import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
 import br.org.atkdgv.forcafeminina.domain.Mural;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
+import br.org.atkdgv.forcafeminina.domain.Presenca;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
+import br.org.atkdgv.forcafeminina.domain.Turma;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.CalendarioAulaRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaConfirmacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
 import br.org.atkdgv.forcafeminina.repo.MuralRepository;
+import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.PresencaRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import java.time.LocalDate;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,6 +37,8 @@ public class DashboardController {
   private final PresencaRepository presencas;
   private final MuralRepository mural;
   private final UsuarioRepository usuarios;
+  private final TurmaRepository turmas;
+  private final NucleoRepository nucleos;
   private final ObjectMapper objectMapper;
 
   public DashboardController(
@@ -42,6 +48,8 @@ public class DashboardController {
       PresencaRepository presencas,
       MuralRepository mural,
       UsuarioRepository usuarios,
+      TurmaRepository turmas,
+      NucleoRepository nucleos,
       ObjectMapper objectMapper) {
     this.inscricoes = inscricoes;
     this.confirmacoes = confirmacoes;
@@ -49,6 +57,8 @@ public class DashboardController {
     this.presencas = presencas;
     this.mural = mural;
     this.usuarios = usuarios;
+    this.turmas = turmas;
+    this.nucleos = nucleos;
     this.objectMapper = objectMapper;
   }
 
@@ -76,7 +86,9 @@ public class DashboardController {
 
     String turma = inscricao.getTurma() == null ? "" : inscricao.getTurma();
     long totalAulas = calendario.countByTurma(turma);
-    long aulasAssistidas = presencas.countByUserIdAndPresenteTrue(atual.getId());
+    // Cada chamada vale meia aula: presença na Defesa Pessoal e na Roda de Conversa do mesmo dia
+    // completa uma aula. Só uma das duas conta 0,5.
+    double aulasAssistidas = presencas.countByUserIdAndPresenteTrue(atual.getId()) * 0.5;
     double percentual =
         totalAulas > 0 ? Math.round((aulasAssistidas * 1000.0) / totalAulas) / 10.0 : 0;
 
@@ -92,10 +104,54 @@ public class DashboardController {
     return body;
   }
 
-  /** Indicadores da Gestão Geral. */
+  /**
+   * Faltas por turma, para o acompanhamento por gráfico no painel. Cada chamada vale meia aula,
+   * então presenças e faltas vêm convertidas em aulas.
+   */
+  @GetMapping("/indicadores/turmas")
+  public List<Map<String, Object>> indicadoresPorTurma() {
+    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
+
+    Map<String, String> nomeNucleo = new HashMap<>();
+    nucleos.findAll().forEach(n -> nomeNucleo.put(n.getId(), n.getNome()));
+
+    List<Map<String, Object>> body = new java.util.ArrayList<>();
+    for (Turma t : turmas.findAll()) {
+      if (!t.isAtivo()) continue;
+      List<Presenca> registros = presencas.findByTurmaId(t.getId());
+      double presentes = registros.stream().filter(Presenca::isPresente).count() * 0.5;
+      double justificadas =
+          registros.stream().filter(p -> !p.isPresente() && p.isJustificada()).count() * 0.5;
+      double semJustificativa =
+          registros.stream().filter(p -> !p.isPresente() && !p.isJustificada()).count() * 0.5;
+      long alunas =
+          inscricoes
+              .findByTurmaIdAndStatusOrderByNomeCompletoAsc(t.getId(), StatusInscricao.APROVADA)
+              .size();
+
+      Map<String, Object> item = new LinkedHashMap<>();
+      item.put("turma_id", t.getId());
+      item.put("turma_nome", t.getNome());
+      item.put("turno", t.getTurno());
+      item.put("dias_semana", t.getDiasSemana());
+      item.put("nucleo_id", t.getNucleoId());
+      item.put("nucleo_nome", nomeNucleo.getOrDefault(t.getNucleoId(), ""));
+      item.put("alunas", alunas);
+      item.put("presencas", presentes);
+      item.put("faltas_justificadas", justificadas);
+      item.put("faltas_sem_justificativa", semJustificativa);
+      body.add(item);
+    }
+    body.sort(
+        java.util.Comparator.comparing((Map<String, Object> m) -> (String) m.get("nucleo_nome"))
+            .thenComparing(m -> (String) m.get("turma_nome")));
+    return body;
+  }
+
+  /** Indicadores da Gestão Geral, compartilhados com o Administrativo. */
   @GetMapping("/indicadores/dashboard")
   public Map<String, Object> indicadores() {
-    CurrentUser.require(Perfil.GESTAO_GERAL);
+    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
 
     // Usuárias excluídas logicamente não entram nas contagens (regra 4.1 do escopo)
     java.util.Set<String> excluidas = new java.util.HashSet<>();

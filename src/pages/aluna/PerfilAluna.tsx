@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PainelTurma, useMinhasTurmas } from '@/components/turmas/MinhasTurmas'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/api/errors'
-import { Camera, KeyRound, Loader2, Save, User } from 'lucide-react'
+import { Camera, GraduationCap, KeyRound, Loader2, Save, User } from 'lucide-react'
 
 function AlterarSenhaCard() {
   const { toast } = useToast()
@@ -102,6 +104,50 @@ function AlterarSenhaCard() {
 }
 
 export default function PerfilAluna() {
+  return (
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+      <PerfilComTurmas />
+    </div>
+  )
+}
+
+/**
+ * O perfil ganha uma aba por turma em que a pessoa atua (professor, auxiliar, mediadora...). Quem
+ * não tem vínculo com turma — alunas e o pessoal administrativo — vê só os dados da conta.
+ */
+function PerfilComTurmas() {
+  const { turmas, loading } = useMinhasTurmas()
+
+  if (loading || !turmas.length) return <DadosDaConta />
+
+  return (
+    <Tabs defaultValue="conta" className="space-y-6">
+      <TabsList className="flex h-auto flex-wrap justify-start">
+        <TabsTrigger value="conta">
+          <User className="mr-1.5 h-4 w-4" />
+          Meu perfil
+        </TabsTrigger>
+        {turmas.map((v) => (
+          <TabsTrigger key={v.turma.id} value={v.turma.id}>
+            <GraduationCap className="mr-1.5 h-4 w-4" />
+            {v.turma.nome}
+            <span className="ml-1.5 text-xs opacity-70">· {v.nucleo_nome}</span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      <TabsContent value="conta">
+        <DadosDaConta />
+      </TabsContent>
+      {turmas.map((v) => (
+        <TabsContent key={v.turma.id} value={v.turma.id}>
+          <PainelTurma vinculo={v} />
+        </TabsContent>
+      ))}
+    </Tabs>
+  )
+}
+
+function DadosDaConta() {
   const { user } = useApp()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -192,7 +238,7 @@ export default function PerfilAluna() {
   }
 
   return (
-    <div className="max-w-lg mx-auto py-8 px-4 space-y-6">
+    <div className="mx-auto max-w-lg space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -249,8 +295,7 @@ export default function PerfilAluna() {
 
             <div className="space-y-1.5">
               <Label htmlFor="nomeSocial">
-                Nome social{' '}
-                <span className="text-muted-foreground font-normal">(opcional)</span>
+                Nome social <span className="text-muted-foreground font-normal">(opcional)</span>
               </Label>
               <Input
                 id="nomeSocial"

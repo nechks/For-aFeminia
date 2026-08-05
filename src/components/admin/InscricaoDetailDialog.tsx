@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge'
 import { FichaInscricaoFF } from '@/lib/types'
 import { getStatusInfo, turmaLabels } from '@/lib/constants'
+import { turnoLabel } from '@/lib/turmas'
 
 interface Props {
   inscricao: FichaInscricaoFF | null
@@ -43,7 +44,8 @@ export function InscricaoDetailDialog({ inscricao, open, onOpenChange }: Props) 
             <Field label="Data de Nascimento" value={inscricao.data_nascimento} />
             <Field label="Telefone" value={inscricao.telefone} />
             <Field label="E-mail" value={inscricao.email} />
-            <Field label="Turma" value={turmaLabels[inscricao.turma ?? ''] ?? inscricao.turma} />
+            <Field label="Núcleo" value={turmaLabels[inscricao.turma ?? ''] ?? inscricao.turma} />
+            <Field label="Período Desejado" value={turnoLabel(inscricao.periodo_preferido)} />
             <Field label="CEP" value={inscricao.cep} />
             <Field label="Endereço" value={inscricao.endereco} />
             <Field label="Bairro" value={inscricao.bairro} />

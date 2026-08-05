@@ -6,6 +6,7 @@ export interface PresencaAluno {
   user_id: string
   nome_completo: string
   turma: string
+  turma_id: string
   presenca: {
     id: string
     presente: boolean
@@ -15,8 +16,10 @@ export interface PresencaAluno {
 }
 
 export interface PresencaTurmaResponse {
-  turma: string
-  dataAula: string
+  turma_id: string
+  turma_nome: string
+  tipo_chamada: string
+  data_aula: string
   alunos: PresencaAluno[]
 }
 
@@ -27,20 +30,35 @@ export interface RegistroPresenca {
   justificativa?: string
 }
 
+/**
+ * Cada turma tem duas chamadas independentes no mesmo dia de aula (Defesa Pessoal e Roda de
+ * Conversa), por isso o tipo faz parte da identidade do registro.
+ */
 export const getPresencasTurma = async (
-  turma: string,
+  turmaId: string,
   dataAula: string,
+  tipoChamada: string,
 ): Promise<PresencaTurmaResponse> => {
-  const params = new URLSearchParams({ turma, dataAula })
+  const params = new URLSearchParams({
+    turma_id: turmaId,
+    data_aula: dataAula,
+    tipo_chamada: tipoChamada,
+  })
   return api.get<PresencaTurmaResponse>(`/api/professor/presenca?${params.toString()}`)
 }
 
 export const registrarPresencas = async (
+  turmaId: string,
   dataAula: string,
+  tipoChamada: string,
   registros: RegistroPresenca[],
-  turma?: string,
 ): Promise<any> => {
-  return api.post('/api/professor/presenca', { dataAula, turma, registros })
+  return api.post('/api/professor/presenca', {
+    turma_id: turmaId,
+    data_aula: dataAula,
+    tipo_chamada: tipoChamada,
+    registros,
+  })
 }
 
 export interface PresencaDetalhe {

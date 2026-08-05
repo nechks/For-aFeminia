@@ -38,9 +38,10 @@ public class Alerta {
   @Column(nullable = false, length = 40)
   private String tipo;
 
+  /** Em aulas: cada chamada perdida vale 0,5, então as duas do mesmo dia somam uma falta. */
   @JsonProperty("faltas_sem_justificativa")
   @Column(nullable = false)
-  private int faltasSemJustificativa;
+  private double faltasSemJustificativa;
 
   /** Datas das faltas, separadas por vírgula. */
   @Column(columnDefinition = "TEXT")
@@ -80,8 +81,8 @@ public class Alerta {
   public void setTurma(String turma) { this.turma = turma; }
   public String getTipo() { return tipo; }
   public void setTipo(String tipo) { this.tipo = tipo; }
-  public int getFaltasSemJustificativa() { return faltasSemJustificativa; }
-  public void setFaltasSemJustificativa(int v) { this.faltasSemJustificativa = v; }
+  public double getFaltasSemJustificativa() { return faltasSemJustificativa; }
+  public void setFaltasSemJustificativa(double v) { this.faltasSemJustificativa = v; }
   public String getDatas() { return datas; }
   public void setDatas(String datas) { this.datas = datas; }
   public String getStatus() { return status; }

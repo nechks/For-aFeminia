@@ -17,10 +17,16 @@ import java.util.UUID;
     name = "presenca",
     indexes = {
       @Index(name = "idx_presenca_user", columnList = "userId"),
-      @Index(name = "idx_presenca_data", columnList = "dataAula")
+      @Index(name = "idx_presenca_data", columnList = "dataAula"),
+      @Index(name = "idx_presenca_turma_id", columnList = "turmaId")
     },
+    // A chave inclui a turma e o tipo de chamada: a mesma aluna tem duas chamadas por dia de aula
+    // (Roda de Conversa e Defesa Pessoal). O índice antigo (userId, dataAula) é removido pelo
+    // SchemaPatch, já que ddl-auto=update não apaga constraints.
     uniqueConstraints =
-        @UniqueConstraint(name = "idx_presenca_user_data", columnNames = {"userId", "dataAula"}))
+        @UniqueConstraint(
+            name = "uk_presenca_turma_data_tipo",
+            columnNames = {"userId", "turmaId", "dataAula", "tipoChamada"}))
 public class Presenca {
 
   @Id
@@ -43,7 +49,17 @@ public class Presenca {
 
   private String justificativa;
 
+  /** Código do núcleo (nome legado do campo). */
   private String turma;
+
+  @JsonProperty("turma_id")
+  @Column(length = 36)
+  private String turmaId;
+
+  /** {@link br.org.atkdgv.forcafeminina.domain.TipoChamada}. */
+  @JsonProperty("tipo_chamada")
+  @Column(length = 30)
+  private String tipoChamada;
 
   @JsonProperty("registrado_por")
   @Column(length = 36)
@@ -85,6 +101,10 @@ public class Presenca {
   public void setJustificativa(String justificativa) { this.justificativa = justificativa; }
   public String getTurma() { return turma; }
   public void setTurma(String turma) { this.turma = turma; }
+  public String getTurmaId() { return turmaId; }
+  public void setTurmaId(String turmaId) { this.turmaId = turmaId; }
+  public String getTipoChamada() { return tipoChamada; }
+  public void setTipoChamada(String tipoChamada) { this.tipoChamada = tipoChamada; }
   public String getRegistradoPor() { return registradoPor; }
   public void setRegistradoPor(String registradoPor) { this.registradoPor = registradoPor; }
   public Instant getCreated() { return created; }

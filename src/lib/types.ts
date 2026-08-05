@@ -49,7 +49,12 @@ export interface FichaInscricaoFF {
   cidade?: string
   estado?: string
   cep?: string
+  /** Código do núcleo escolhido na inscrição (nome legado do campo). */
   turma?: string
+  /** Turma concreta em que a aluna foi alocada; vazio até a gestão alocar. */
+  turma_id?: string
+  /** Período pedido na inscrição (MANHA/TARDE/NOITE); orienta a alocação na aprovação. */
+  periodo_preferido?: string
   status: StatusInscricao
   aceite_lgpd: boolean
   data_primeira_aula?: string
@@ -117,22 +122,22 @@ export interface CalendarioAula {
   updated: string
 }
 
-export type TipoAcessoAtendimento = 'PUBLICO' | 'CONFIDENCIAL'
+export type AtendimentoTipo = 'INDIVIDUAL' | 'GRUPAL' | 'FAMILIAR' | 'ENCAMINHAMENTO'
 
 export interface Atendimento {
   id: string
-  created_by: string
   aluna_id: string
-  data: string
-  horario: string
-  tipo_acesso: TipoAcessoAtendimento
-  relatorio: string
+  profissional_id: string
   turma: string
+  data_atendimento: string
+  tipo: AtendimentoTipo
+  descricao: string
+  encaminhamento?: string
   created: string
   updated: string
   expand?: {
-    created_by?: Usuario
     aluna_id?: Usuario
+    profissional_id?: Usuario
   }
 }
 

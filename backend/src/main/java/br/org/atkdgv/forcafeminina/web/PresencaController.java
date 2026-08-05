@@ -1,12 +1,20 @@
 package br.org.atkdgv.forcafeminina.web;
 
 import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
+import br.org.atkdgv.forcafeminina.domain.Nucleo;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.Presenca;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
+import br.org.atkdgv.forcafeminina.domain.TipoChamada;
+import br.org.atkdgv.forcafeminina.domain.TipoProfissional;
+import br.org.atkdgv.forcafeminina.domain.Turma;
+import br.org.atkdgv.forcafeminina.domain.TurmaEquipe;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
+import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.PresencaRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaEquipeRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import br.org.atkdgv.forcafeminina.service.AlertaService;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -32,62 +40,94 @@ public class PresencaController {
   private final PresencaRepository presencas;
   private final FichaInscricaoRepository inscricoes;
   private final UsuarioRepository usuarios;
+  private final TurmaRepository turmasRepo;
+  private final NucleoRepository nucleos;
+  private final TurmaEquipeRepository equipe;
   private final AlertaService alertaService;
 
   public PresencaController(
       PresencaRepository presencas,
       FichaInscricaoRepository inscricoes,
       UsuarioRepository usuarios,
+      TurmaRepository turmasRepo,
+      NucleoRepository nucleos,
+      TurmaEquipeRepository equipe,
       AlertaService alertaService) {
     this.presencas = presencas;
     this.inscricoes = inscricoes;
     this.usuarios = usuarios;
+    this.turmasRepo = turmasRepo;
+    this.nucleos = nucleos;
+    this.equipe = equipe;
     this.alertaService = alertaService;
   }
 
   /**
-   * Regra 8.1 do escopo: professor(a) só acessa a chamada do próprio núcleo. A validação é feita
-   * sempre no backend, mesmo que o frontend esconda opções.
+   * Regra 8.1 do escopo, agora por turma: a pessoa só acessa a chamada das turmas em que tem
+   * vínculo ativo, e o tipo do vínculo precisa permitir chamada (Monitor de Criança não faz). A
+   * validação é feita sempre no backend, mesmo que o frontend esconda as opções.
    */
-  private String enforceNucleo(Usuario atual, String turmaSolicitada) {
-    if (atual.getPerfil() != Perfil.PROFESSOR) return turmaSolicitada;
-    if ("MONITOR_CRIANCA".equals(atual.getTipoProfissional())) {
+  private Turma enforceTurma(Usuario atual, String turmaId, String tipoChamada) {
+    if (turmaId == null || turmaId.isBlank()) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "turma_id é obrigatório.");
+    }
+    Turma turma =
+        turmasRepo
+            .findById(turmaId)
+            .orElseThrow(
+                () -> new ApiException(HttpStatus.NOT_FOUND, "not_found", "Turma não encontrada."));
+    if (atual.getPerfil() == Perfil.ADMINISTRATIVO || atual.getPerfil() == Perfil.GESTAO_GERAL) {
+      return turma;
+    }
+    TurmaEquipe vinculo =
+        equipe
+            .findByTurmaIdAndUserId(turmaId, atual.getId())
+            .filter(TurmaEquipe::isAtivo)
+            .orElseThrow(
+                () ->
+                    new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "sem_vinculo",
+                        "Você não tem vínculo com esta turma."));
+    // Cada profissional só acessa a chamada da própria função.
+    if (!TipoProfissional.podeFazerChamada(vinculo.getTipoProfissional(), tipoChamada)) {
       throw new ApiException(
           HttpStatus.FORBIDDEN,
           "chamada_nao_permitida",
-          "Monitor de Criança não possui permissão para realizar chamadas.");
+          "Sua função nesta turma não faz a chamada de "
+              + (TipoChamada.RODA_CONVERSA.equals(tipoChamada) ? "Roda de Conversa" : "Defesa Pessoal")
+              + ".");
     }
-    String nucleo = atual.getTurma();
-    if (nucleo == null || nucleo.isBlank()) {
+    return turma;
+  }
+
+  private String enforceTipoChamada(String tipoChamada) {
+    if (!TipoChamada.valido(tipoChamada)) {
       throw new ApiException(
-          HttpStatus.FORBIDDEN,
-          "sem_nucleo",
-          "Seu perfil de professor(a) não tem núcleo definido. Contate o administrativo.");
+          HttpStatus.BAD_REQUEST,
+          "tipo_chamada_invalido",
+          "Informe tipo_chamada como RODA_CONVERSA ou DEFESA_PESSOAL.");
     }
-    if (turmaSolicitada != null && !turmaSolicitada.isBlank() && !nucleo.equals(turmaSolicitada)) {
-      throw new ApiException(
-          HttpStatus.FORBIDDEN,
-          "nucleo_invalido",
-          "Você só pode registrar e consultar a chamada do seu núcleo.");
-    }
-    return nucleo;
+    return tipoChamada;
   }
 
   @GetMapping("/professor/presenca")
   public Map<String, Object> listarChamada(
-      @RequestParam String turma, @RequestParam String dataAula) {
+      @RequestParam("turma_id") String turmaId,
+      @RequestParam("data_aula") String dataAula,
+      @RequestParam("tipo_chamada") String tipoChamada) {
     Usuario atual =
-        CurrentUser.require(Perfil.PROFESSOR, Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
-    turma = enforceNucleo(atual, turma);
-    if (turma.isBlank()) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "turma é obrigatório.");
-    }
-    if (dataAula.isBlank()) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "dataAula é obrigatório.");
+        CurrentUser.require(
+            Perfil.PROFESSOR, Perfil.ASSISTENTE_SOCIAL, Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
+    enforceTipoChamada(tipoChamada);
+    Turma turma = enforceTurma(atual, turmaId, tipoChamada);
+    if (dataAula == null || dataAula.isBlank()) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "data_aula é obrigatório.");
     }
 
     List<FichaInscricao> aprovadas =
-        inscricoes.findByTurmaAndStatusOrderByNomeCompletoAsc(turma, StatusInscricao.APROVADA);
+        inscricoes.findByTurmaIdAndStatusOrderByNomeCompletoAsc(
+            turma.getId(), StatusInscricao.APROVADA);
 
     List<Map<String, Object>> alunos = new ArrayList<>();
     for (FichaInscricao insc : aprovadas) {
@@ -95,11 +135,16 @@ public class PresencaController {
       aluno.put("inscricao_id", insc.getId());
       aluno.put("user_id", insc.getUserId());
       aluno.put("nome_completo", insc.getNomeCompleto());
-      aluno.put("turma", turma);
+      aluno.put("turma", insc.getTurma());
+      aluno.put("turma_id", turma.getId());
 
       Map<String, Object> presencaInfo = null;
       if (insc.getUserId() != null) {
-        Presenca p = presencas.findByUserIdAndDataAula(insc.getUserId(), dataAula).orElse(null);
+        Presenca p =
+            presencas
+                .findByUserIdAndTurmaIdAndDataAulaAndTipoChamada(
+                    insc.getUserId(), turma.getId(), dataAula, tipoChamada)
+                .orElse(null);
         if (p != null) {
           presencaInfo =
               Map.of(
@@ -114,8 +159,10 @@ public class PresencaController {
     }
 
     Map<String, Object> body = new LinkedHashMap<>();
-    body.put("turma", turma);
-    body.put("dataAula", dataAula);
+    body.put("turma_id", turma.getId());
+    body.put("turma_nome", turma.getNome());
+    body.put("tipo_chamada", tipoChamada);
+    body.put("data_aula", dataAula);
     body.put("alunos", alunos);
     return body;
   }
@@ -126,15 +173,21 @@ public class PresencaController {
       boolean justificada,
       String justificativa) {}
 
-  public record RegistrarRequest(String dataAula, String turma, List<RegistroPresenca> registros) {}
+  public record RegistrarRequest(
+      @JsonProperty("data_aula") String dataAula,
+      @JsonProperty("turma_id") String turmaId,
+      @JsonProperty("tipo_chamada") String tipoChamada,
+      List<RegistroPresenca> registros) {}
 
   @PostMapping("/professor/presenca")
   public Map<String, Object> registrar(@RequestBody RegistrarRequest req) {
     Usuario atual =
-        CurrentUser.require(Perfil.PROFESSOR, Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
-    String turma = enforceNucleo(atual, req.turma());
+        CurrentUser.require(
+            Perfil.PROFESSOR, Perfil.ASSISTENTE_SOCIAL, Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
+    String tipoChamada = enforceTipoChamada(req.tipoChamada());
+    Turma turma = enforceTurma(atual, req.turmaId(), tipoChamada);
     if (req.dataAula() == null || req.dataAula().isBlank()) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "dataAula é obrigatório.");
+      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "data_aula é obrigatório.");
     }
     if (req.registros() == null || req.registros().isEmpty()) {
       throw new ApiException(
@@ -143,29 +196,34 @@ public class PresencaController {
           "registros é obrigatório e deve ser um array não vazio.");
     }
 
+    String codigoNucleo =
+        nucleos.findById(turma.getNucleoId()).map(Nucleo::getCodigo).orElse(null);
+
+    // Só entram alunas realmente alocadas nesta turma, mesmo que o payload traga outras.
+    Set<String> alocadas = new HashSet<>();
+    inscricoes
+        .findByTurmaIdAndStatusOrderByNomeCompletoAsc(turma.getId(), StatusInscricao.APROVADA)
+        .forEach(f -> alocadas.add(f.getUserId()));
+
     List<Map<String, Object>> results = new ArrayList<>();
     for (RegistroPresenca reg : req.registros()) {
       if (reg.userId() == null || reg.userId().isBlank()) continue;
-
-      // Professora só registra alunas do próprio núcleo, mesmo que o payload traga outras
-      if (atual.getPerfil() == Perfil.PROFESSOR) {
-        String turmaAluna =
-            inscricoes
-                .findFirstByUserIdOrderByCreatedDesc(reg.userId())
-                .map(FichaInscricao::getTurma)
-                .orElse("");
-        if (!turma.equals(turmaAluna)) continue;
-      }
+      if (!alocadas.contains(reg.userId())) continue;
 
       Presenca p =
-          presencas.findByUserIdAndDataAula(reg.userId(), req.dataAula()).orElseGet(Presenca::new);
+          presencas
+              .findByUserIdAndTurmaIdAndDataAulaAndTipoChamada(
+                  reg.userId(), turma.getId(), req.dataAula(), tipoChamada)
+              .orElseGet(Presenca::new);
       boolean nova = p.getId() == null;
       p.setUserId(reg.userId());
       p.setDataAula(req.dataAula());
+      p.setTurmaId(turma.getId());
+      p.setTipoChamada(tipoChamada);
       p.setPresente(reg.presente());
       p.setJustificada(reg.justificada());
       p.setJustificativa(reg.justificativa() == null ? "" : reg.justificativa());
-      if (turma != null && !turma.isBlank()) p.setTurma(turma);
+      if (codigoNucleo != null && !codigoNucleo.isBlank()) p.setTurma(codigoNucleo);
       p.setRegistradoPor(atual.getId());
       presencas.save(p);
       results.add(Map.of("user_id", reg.userId(), nova ? "created" : "updated", true));

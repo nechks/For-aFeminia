@@ -24,6 +24,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useMinhasTurmas } from '@/components/turmas/MinhasTurmas'
 import { fileUrl } from '@/lib/api/client'
 
 interface NavItem {
@@ -35,11 +36,11 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    // Visão operacional do Administrativo; a Gestão Geral usa "Indicadores"
-    // (/gestao/dashboard), que cobre os mesmos dados e mais.
-    title: 'Dashboard',
+    // Administrativo e Gestão Geral veem o mesmo painel de indicadores; muda só a rota de
+    // entrada de cada perfil, para o item do menu acender na página em que a pessoa está.
+    title: 'Indicadores',
     href: '/admin/dashboard',
-    icon: LayoutDashboard,
+    icon: BarChart3,
     roles: ['ADMINISTRATIVO'],
   },
   {
@@ -66,7 +67,12 @@ const navItems: NavItem[] = [
     icon: FileBarChart,
     roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
   },
-  { title: 'Núcleos', href: '/gestao/nucleos', icon: Building2, roles: ['GESTAO_GERAL'] },
+  {
+    title: 'Núcleos',
+    href: '/gestao/nucleos',
+    icon: Building2,
+    roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
+  },
   { title: 'Projetos', href: '/gestao/projetos', icon: FolderKanban, roles: ['GESTAO_GERAL'] },
   { title: 'Meu Painel', href: '/aluna/dashboard', icon: LayoutDashboard, roles: ['ALUNA_FF'] },
   {
@@ -122,12 +128,12 @@ function filtrarItensAluna(items: NavItem[], perfil: string, alunaLiberada: bool
   return items.filter((i) => i.href !== '/aluna/ficha')
 }
 
-function filtrarItensEquipe(
-  items: NavItem[],
-  perfil: string,
-  tipoProfissional?: string,
-): NavItem[] {
-  if (perfil === 'PROFESSOR' && tipoProfissional === 'MONITOR_CRIANCA') {
+/**
+ * As permissões da equipe valem por turma: a mesma pessoa pode ser professora numa turma e monitora
+ * em outra. O item Chamada só some quando nenhum dos vínculos permite fazer chamada.
+ */
+function filtrarItensEquipe(items: NavItem[], perfil: string, podeAlgumaChamada: boolean): NavItem[] {
+  if (perfil !== 'ALUNA_FF' && !podeAlgumaChamada) {
     return items.filter((item) => item.href !== '/professor/chamada')
   }
   return items
@@ -135,6 +141,7 @@ function filtrarItensEquipe(
 
 export function Sidebar() {
   const { user, logout, authLoading, alunaLiberada } = useApp()
+  const { turmas } = useMinhasTurmas()
   const location = useLocation()
 
   if (authLoading || !user) return null
@@ -146,7 +153,7 @@ export function Sidebar() {
       alunaLiberada,
     ),
     user.perfil,
-    user.tipo_profissional,
+    turmas.some((t) => (t.chamadas_permitidas ?? []).length > 0),
   )
 
   return (
@@ -204,6 +211,7 @@ export function Sidebar() {
 
 export function TopHeader() {
   const { user, authLoading, logout, alunaLiberada } = useApp()
+  const { turmas } = useMinhasTurmas()
   const [open, setOpen] = useState(false)
   const location = useLocation()
 
@@ -215,7 +223,7 @@ export function TopHeader() {
       alunaLiberada,
     ),
     user.perfil,
-    user.tipo_profissional,
+    turmas.some((t) => (t.chamadas_permitidas ?? []).length > 0),
   )
 
   return (

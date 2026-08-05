@@ -33,25 +33,28 @@ public class AlertaService {
   }
 
   /**
-   * A partir da primeira falta sem justificativa, gera alerta progressivo para a equipe. Alertas abertos são atualizados em vez de
-   * duplicados.
+   * Qualquer falta sem justificativa — em qualquer uma das duas chamadas do dia — gera alerta
+   * progressivo para a equipe. Alertas abertos são atualizados em vez de duplicados.
    */
   public void verificarFaltasSemJustificativa(String alunaId) {
-    List<Presenca> faltas =
+    // Qualquer falta sem justificativa já abre o alerta (LIMITE_FALTAS = 0), inclusive quando a
+    // aluna perde só uma das duas chamadas do dia — que vale 0,5. As duas somam uma falta completa.
+    List<Presenca> registros =
         presencas.findByUserIdOrderByDataAulaDesc(alunaId).stream()
             .filter(p -> !p.isPresente())
             .filter(p -> !p.isJustificada())
             .toList();
+    double faltas = registros.size() * 0.5;
 
-    if (faltas.size() <= LIMITE_FALTAS) return;
+    if (faltas <= LIMITE_FALTAS) return;
 
     String datas =
-        faltas.stream().map(Presenca::getDataAula).sorted().collect(Collectors.joining(","));
+        registros.stream().map(Presenca::getDataAula).distinct().sorted().collect(Collectors.joining(","));
 
     Alerta aberto =
         alertas.findByAlunaIdAndTipoAndStatus(alunaId, TIPO_FALTAS, "ABERTO").orElse(null);
     if (aberto != null) {
-      aberto.setFaltasSemJustificativa(faltas.size());
+      aberto.setFaltasSemJustificativa(faltas);
       aberto.setDatas(datas);
       alertas.save(aberto);
       return;
@@ -70,7 +73,7 @@ public class AlertaService {
             .map(f -> f.getTurma() == null ? "" : f.getTurma())
             .orElse(""));
     alerta.setTipo(TIPO_FALTAS);
-    alerta.setFaltasSemJustificativa(faltas.size());
+    alerta.setFaltasSemJustificativa(faltas);
     alerta.setDatas(datas);
     alerta.setStatus("ABERTO");
     alertas.save(alerta);

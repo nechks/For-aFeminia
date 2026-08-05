@@ -175,12 +175,15 @@ public class RelatorioController {
         confirmacao == null ? List.of() : documentos.findByConfirmacaoId(confirmacao.getId());
     body.put("documentos", docs);
 
+    // Cada chamada vale meia aula: as duas do mesmo dia (Defesa Pessoal e Roda de Conversa)
+    // completam uma aula. A lista crua continua em "registros", separada por tipo de chamada.
     List<Presenca> lista = presencas.findByUserIdOrderByDataAulaDesc(userId);
-    long presentes = lista.stream().filter(Presenca::isPresente).count();
+    double presentes = lista.stream().filter(Presenca::isPresente).count() * 0.5;
+    double faltas = lista.stream().filter(p -> !p.isPresente()).count() * 0.5;
     Map<String, Object> frequencia = new LinkedHashMap<>();
-    frequencia.put("total_aulas", lista.size());
+    frequencia.put("total_aulas", presentes + faltas);
     frequencia.put("presencas", presentes);
-    frequencia.put("faltas", lista.size() - presentes);
+    frequencia.put("faltas", faltas);
     frequencia.put("registros", lista);
     body.put("frequencia", frequencia);
 
@@ -280,7 +283,8 @@ public class RelatorioController {
     List<FichaInscricao> alunas = fichas.findByTurmaAndStatusOrderByNomeCompletoAsc(turma, StatusInscricao.APROVADA);
     List<Map<String, Object>> linhas = new ArrayList<>();
     for (FichaInscricao f : alunas) {
-      long faltas = f.getUserId() == null ? 0 : presencas.findByUserIdOrderByDataAulaDesc(f.getUserId()).stream().filter(p -> !p.isPresente()).count();
+      // Cada chamada perdida vale meia aula; as duas do mesmo dia somam uma falta completa.
+      double faltas = f.getUserId() == null ? 0 : presencas.findByUserIdOrderByDataAulaDesc(f.getUserId()).stream().filter(p -> !p.isPresente()).count() * 0.5;
       Map<String, Object> todos = new LinkedHashMap<>();
       todos.put("nome_completo", f.getNomeCompleto()); todos.put("cpf", f.getCpf());
       todos.put("rg", f.getRg()); todos.put("data_nascimento", f.getDataNascimento());

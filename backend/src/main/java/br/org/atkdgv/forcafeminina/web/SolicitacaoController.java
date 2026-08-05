@@ -2,10 +2,13 @@ package br.org.atkdgv.forcafeminina.web;
 
 import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.Solicitacao;
+import br.org.atkdgv.forcafeminina.domain.TipoProfissional;
 import br.org.atkdgv.forcafeminina.domain.Turma;
+import br.org.atkdgv.forcafeminina.domain.TurmaEquipe;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.SolicitacaoRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaEquipeRepository;
 import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -37,14 +40,9 @@ public class SolicitacaoController {
   private final ObjectMapper objectMapper;
   private final NucleoRepository nucleos;
   private final TurmaRepository turmas;
+  private final TurmaEquipeRepository equipe;
 
-  private static final List<String> TIPOS_PROFISSIONAIS =
-      List.of(
-          "PROFESSORA_DEFESA_PESSOAL",
-          "AUXILIAR_DEFESA_PESSOAL",
-          "ASSISTENTE_SOCIAL",
-          "MEDIADORA_RODA_CONVERSA",
-          "MONITOR_CRIANCA");
+  private static final List<String> TIPOS_PROFISSIONAIS = TipoProfissional.TODOS;
 
   public SolicitacaoController(
       SolicitacaoRepository solicitacoes,
@@ -52,13 +50,15 @@ public class SolicitacaoController {
       PasswordEncoder passwordEncoder,
       ObjectMapper objectMapper,
       NucleoRepository nucleos,
-      TurmaRepository turmas) {
+      TurmaRepository turmas,
+      TurmaEquipeRepository equipe) {
     this.solicitacoes = solicitacoes;
     this.usuarios = usuarios;
     this.passwordEncoder = passwordEncoder;
     this.objectMapper = objectMapper;
     this.nucleos = nucleos;
     this.turmas = turmas;
+    this.equipe = equipe;
   }
 
   public record CriacaoAlunaRequest(String name, String email, String password) {}
@@ -109,11 +109,15 @@ public class SolicitacaoController {
   public List<Solicitacao> listar() {
     Usuario atual =
         CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ASSISTENTE_SOCIAL, Perfil.ADMINISTRATIVO);
-    return switch (atual.getPerfil()) {
-      case GESTAO_GERAL -> solicitacoes.findByStatusOrderByCreatedDesc("PENDENTE");
-      case ASSISTENTE_SOCIAL -> solicitacoes.findBySolicitadoPorAndStatusOrderByCreatedDesc(atual.getId(), "PENDENTE");
-      default -> solicitacoes.findByTipoNotAndStatusOrderByCreatedDesc(TIPO_CRIACAO_ALUNA, "PENDENTE");
-    };
+    if (atual.getPerfil() == Perfil.GESTAO_GERAL) {
+      return solicitacoes.findByStatusOrderByCreatedDesc("PENDENTE");
+    }
+    if (atual.getPerfil() == Perfil.ASSISTENTE_SOCIAL) {
+      return solicitacoes.findBySolicitadoPorAndStatusOrderByCreatedDesc(
+          atual.getId(), "PENDENTE");
+    }
+    return solicitacoes.findByTipoNotAndStatusOrderByCreatedDesc(
+        TIPO_CRIACAO_ALUNA, "PENDENTE");
   }
 
   public record AprovarRequest(
@@ -231,6 +235,15 @@ public class SolicitacaoController {
     usuario.setTurmaId(turma.getId());
     usuario.setTipoProfissional(tipoProfissional);
     usuarios.save(usuario);
+
+    // O vínculo com a turma é o que dá as permissões e faz a turma aparecer no perfil da pessoa.
+    // Os campos acima ficam como "vínculo principal", usados pelas telas que ainda leem um só.
+    TurmaEquipe vinculo = new TurmaEquipe();
+    vinculo.setTurmaId(turma.getId());
+    vinculo.setUserId(usuario.getId());
+    vinculo.setTipoProfissional(tipoProfissional);
+    vinculo.setAtivo(true);
+    equipe.save(vinculo);
   }
 
   private String extrairEmail(Solicitacao solicitacao) {

@@ -15,6 +15,24 @@ export interface IndicadoresData {
   }
 }
 
+/** Faltas por turma. Presenças e faltas já vêm em aulas (cada chamada vale 0,5). */
+export interface IndicadorTurma {
+  turma_id: string
+  turma_nome: string
+  turno: string
+  dias_semana: string
+  nucleo_id: string
+  nucleo_nome: string
+  alunas: number
+  presencas: number
+  faltas_justificadas: number
+  faltas_sem_justificativa: number
+}
+
 export const getIndicadores = async (): Promise<IndicadoresData> => {
   return api.get<IndicadoresData>('/api/indicadores/dashboard')
+}
+
+export const getIndicadoresPorTurma = async (): Promise<IndicadorTurma[]> => {
+  return api.get<IndicadorTurma[]>('/api/indicadores/turmas')
 }

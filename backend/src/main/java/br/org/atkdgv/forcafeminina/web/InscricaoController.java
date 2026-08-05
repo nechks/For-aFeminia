@@ -13,6 +13,7 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -60,6 +61,7 @@ public class InscricaoController {
       String estado,
       String cep,
       String turma,
+      @JsonProperty("periodo_preferido") String periodoPreferido,
       @JsonProperty("aceite_lgpd") Boolean aceiteLgpd) {}
 
   /**
@@ -101,6 +103,17 @@ public class InscricaoController {
       errors.put("data_nascimento", "Data de nascimento inválida");
     }
 
+    if (req.turma() == null || req.turma().isBlank()) {
+      errors.put("turma", "Selecione o núcleo onde deseja estudar");
+    }
+
+    // Preferência de período: a gestão usa isso para alocar na turma concreta ao aprovar.
+    if (req.periodoPreferido() == null || req.periodoPreferido().isBlank()) {
+      errors.put("periodo_preferido", "Selecione o período desejado");
+    } else if (!Set.of("MANHA", "TARDE", "NOITE").contains(req.periodoPreferido())) {
+      errors.put("periodo_preferido", "Período inválido");
+    }
+
     if (req.aceiteLgpd() == null || !req.aceiteLgpd()) {
       errors.put("aceite_lgpd", "É necessário aceitar os termos da LGPD");
     }
@@ -140,6 +153,7 @@ public class InscricaoController {
     ficha.setEstado(nullToEmpty(req.estado()));
     ficha.setCep(nullToEmpty(req.cep()));
     ficha.setTurma(nullToEmpty(req.turma()));
+    ficha.setPeriodoPreferido(req.periodoPreferido());
     ficha.setAceiteLgpd(true);
     ficha.setStatus(StatusInscricao.AGUARDANDO);
 

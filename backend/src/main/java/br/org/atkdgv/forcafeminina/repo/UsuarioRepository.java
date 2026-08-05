@@ -11,6 +11,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, String> {
 
   List<Usuario> findByPerfilOrderByNameAsc(Perfil perfil);
 
+  List<Usuario> findByPerfilInOrderByNameAsc(List<Perfil> perfis);
+
   boolean existsByEmailIgnoreCase(String email);
 
   boolean existsByTurma(String turma);

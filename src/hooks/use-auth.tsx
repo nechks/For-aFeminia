@@ -6,7 +6,13 @@ interface AuthContextType {
   user: Usuario | null
   isAuthenticated: boolean
   loading: boolean
-  signUp: (name: string, email: string, password: string, perfil?: PerfilUsuario, turma?: string) => Promise<{ error: any }>
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    perfil?: PerfilUsuario,
+    turma?: string,
+  ) => Promise<{ error: any }>
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => void
 }
@@ -43,7 +49,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [])
 
-  const signUp = async (name: string, email: string, password: string, perfil: PerfilUsuario = 'ALUNA_FF', turma?: string) => {
+  const signUp = async (
+    name: string,
+    email: string,
+    password: string,
+    perfil: PerfilUsuario = 'ALUNA_FF',
+    turma?: string,
+  ) => {
     try {
       await api.post('/api/auth/register', { name, email, password, perfil, turma: turma ?? null })
       return { error: null }

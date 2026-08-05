@@ -26,6 +26,7 @@ import Solicitacoes from './pages/solicitacoes/Solicitacoes'
 import GestaoDashboard from './pages/gestao/GestaoDashboard'
 import Relatorios from './pages/gestao/Relatorios'
 import Nucleos from './pages/gestao/Nucleos'
+import NucleoDetalhe from './pages/gestao/NucleoDetalhe'
 import Projetos from './pages/gestao/Projetos'
 import { useEffect, useState } from 'react'
 import { getNucleos } from '@/services/nucleos'
@@ -66,12 +67,12 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       />
-      {/* Gestão Geral usa /gestao/dashboard (Indicadores); este é só do Administrativo. */}
+      {/* Administrativo e Gestão Geral veem o mesmo painel de indicadores. */}
       <Route
         path="/admin/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['ADMINISTRATIVO']}>
-            <AdminDashboardPage />
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <GestaoDashboard />
           </ProtectedRoute>
         }
       />
@@ -95,7 +96,7 @@ const AppRoutes = () => (
       <Route
         path="/gestao/dashboard"
         element={
-          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
             <GestaoDashboard />
           </ProtectedRoute>
         }
@@ -111,8 +112,16 @@ const AppRoutes = () => (
       <Route
         path="/gestao/nucleos"
         element={
-          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
             <Nucleos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/nucleos/:id"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <NucleoDetalhe />
           </ProtectedRoute>
         }
       />

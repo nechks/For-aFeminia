@@ -49,7 +49,22 @@ public class FichaInscricao {
   private String cidade;
   private String estado;
   private String cep;
+
+  /** Código do núcleo da aluna (nome legado do campo). */
   private String turma;
+
+  /** Turma dentro do núcleo em que a aluna está alocada; nulo enquanto não for alocada. */
+  @JsonProperty("turma_id")
+  @Column(length = 36)
+  private String turmaId;
+
+  /**
+   * Período que a aluna pediu na inscrição (MANHA, TARDE ou NOITE). É uma preferência: quem aloca
+   * na turma concreta é a gestão, na aprovação.
+   */
+  @JsonProperty("periodo_preferido")
+  @Column(length = 10)
+  private String periodoPreferido;
 
   @Enumerated(EnumType.STRING)
   @Column(length = 20)
@@ -110,6 +125,10 @@ public class FichaInscricao {
   public void setCep(String cep) { this.cep = cep; }
   public String getTurma() { return turma; }
   public void setTurma(String turma) { this.turma = turma; }
+  public String getTurmaId() { return turmaId; }
+  public void setTurmaId(String turmaId) { this.turmaId = turmaId; }
+  public String getPeriodoPreferido() { return periodoPreferido; }
+  public void setPeriodoPreferido(String periodoPreferido) { this.periodoPreferido = periodoPreferido; }
   public StatusInscricao getStatus() { return status; }
   public void setStatus(StatusInscricao status) { this.status = status; }
   public boolean isAceiteLgpd() { return aceiteLgpd; }

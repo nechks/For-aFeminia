@@ -33,6 +33,13 @@ export const getInscricoes = async (): Promise<FichaInscricaoFF[]> => {
   return api.get<FichaInscricaoFF[]>('/api/inscricoes/all')
 }
 
+export const getAlunasByTurma = async (turma: string): Promise<FichaInscricaoFF[]> => {
+  return await pb.collection('ficha_inscricao_ff').getFullList({
+    filter: `turma = "${turma}" && status = "APROVADA"`,
+    sort: 'nome_completo',
+  })
+}
+
 export const getInscricao = async (id: string): Promise<FichaInscricaoFF> => {
   return api.get<FichaInscricaoFF>(`/api/inscricoes/${id}`)
 }

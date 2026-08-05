@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from '@/components/ui/use-toast'
 import { AlertTriangle, CheckCircle2, Loader2, PhoneCall } from 'lucide-react'
 import { turmaLabels } from '@/lib/constants'
+import { formatarAulas } from '@/lib/turmas'
 
 export default function Alertas() {
   const [alertas, setAlertas] = useState<Alerta[]>([])
@@ -57,7 +58,7 @@ export default function Alertas() {
 
   const nivelAlerta = (faltas: number) => {
     if (faltas >= 3) return { nome: 'Contato urgente', borda: 'border-rose-500', badge: 'bg-rose-100 text-rose-800', icone: 'text-rose-600', mensagem: 'Entre em contato com a aluna com urgência.' }
-    if (faltas === 2) return { nome: 'Perigoso', borda: 'border-orange-400', badge: 'bg-orange-100 text-orange-800', icone: 'text-orange-500', mensagem: 'A situação exige atenção e contato com a aluna.' }
+    if (faltas >= 2) return { nome: 'Perigoso', borda: 'border-orange-400', badge: 'bg-orange-100 text-orange-800', icone: 'text-orange-500', mensagem: 'A situação exige atenção e contato com a aluna.' }
     return { nome: 'Moderado', borda: 'border-amber-300', badge: 'bg-amber-100 text-amber-800', icone: 'text-amber-500', mensagem: 'Acompanhe a situação da aluna.' }
   }
 
@@ -87,7 +88,8 @@ export default function Alertas() {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              <strong>{alerta.faltas_sem_justificativa}</strong> falta(s) sem justificativa. {nivel.mensagem}
+              <strong>{formatarAulas(alerta.faltas_sem_justificativa)}</strong> falta(s) sem
+              justificativa — cada chamada perdida vale meia aula. {nivel.mensagem}
             </p>
             {alerta.datas && (
               <p className="text-xs text-muted-foreground">

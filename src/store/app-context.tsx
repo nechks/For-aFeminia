@@ -19,7 +19,13 @@ interface AppState {
   authLoading: boolean
   inscricoes: FichaInscricaoFF[]
   login: (email: string, password: string) => Promise<{ error: any }>
-  signUp: (name: string, email: string, password: string, perfil?: PerfilUsuario, turma?: string) => Promise<{ error: any }>
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    perfil?: PerfilUsuario,
+    turma?: string,
+  ) => Promise<{ error: any }>
   logout: () => void
   addInscricao: (data: Partial<FichaInscricaoFF>) => Promise<{ error: any }>
   updateInscricaoStatus: (
@@ -106,8 +112,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => signIn(email, password)
   const logout = () => signOut()
-  const handleSignUp = async (name: string, email: string, password: string, perfil?: PerfilUsuario, turma?: string) =>
-    signUp(name, email, password, perfil, turma)
+  const handleSignUp = async (
+    name: string,
+    email: string,
+    password: string,
+    perfil?: PerfilUsuario,
+    turma?: string,
+  ) => signUp(name, email, password, perfil, turma)
 
   const addInscricao = async (data: Partial<FichaInscricaoFF>) => {
     try {

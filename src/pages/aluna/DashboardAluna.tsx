@@ -38,6 +38,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { turmaLabels } from '@/lib/constants'
+import { formatarAulas } from '@/lib/turmas'
 import { fileUrl } from '@/lib/api/client'
 import { toast } from '@/components/ui/use-toast'
 
@@ -153,7 +154,12 @@ export default function DashboardAluna() {
         </Avatar>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Olá, {user?.nomeSocial?.split(' ')[0] ?? dashboard?.nome?.split(' ')[0] ?? user?.name?.split(' ')[0] ?? 'Aluna'}!
+            Olá,{' '}
+            {user?.nomeSocial?.split(' ')[0] ??
+              dashboard?.nome?.split(' ')[0] ??
+              user?.name?.split(' ')[0] ??
+              'Aluna'}
+            !
           </h1>
           <p className="text-muted-foreground mt-1">
             Bem-vinda ao seu painel do Projeto Força Feminina.
@@ -226,7 +232,8 @@ export default function DashboardAluna() {
                 <div className="flex-1 space-y-4">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      Aulas Assistidas: <strong>{dashboard?.aulasAssistidas ?? 0}</strong>
+                      Aulas Assistidas:{' '}
+                      <strong>{formatarAulas(dashboard?.aulasAssistidas)}</strong>
                     </span>
                     <span className="text-muted-foreground">
                       Total: <strong>{dashboard?.totalAulas ?? 0}</strong>
