@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/app-context'
 import { getMinhaConfirmacao, submitConfirmacao } from '@/services/ficha-confirmacao'
-import { formSections } from '@/lib/confirmacao-fields'
+import {
+  calcularRendaPerCapita,
+  faixaDaRenda,
+  formSections,
+  formatarReal,
+} from '@/lib/confirmacao-fields'
 import { buscarCep, formatCep } from '@/lib/viacep'
 import { FieldRenderer } from '@/components/confirmacao/FieldRenderer'
 import { Button } from '@/components/ui/button'
@@ -38,7 +43,8 @@ export default function FichaConfirmacao() {
   const [step, setStep] = useState(1)
   const [values, setValues] = useState<Record<string, any>>({})
   const [files, setFiles] = useState<Record<string, File>>({})
-  const [submitted, setSubmitted] = useState(false)
+  const [fichaEntregue, setFichaEntregue] = useState(false)
+  const [enviadaAgora, setEnviadaAgora] = useState(false)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [avisoFinalizacao, setAvisoFinalizacao] = useState(false)
@@ -47,7 +53,7 @@ export default function FichaConfirmacao() {
     if (!user) return
     getMinhaConfirmacao(user.id)
       .then((res) => {
-        if (res) setSubmitted(true)
+        if (res) setFichaEntregue(true)
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -68,6 +74,11 @@ export default function FichaConfirmacao() {
   }, [minhaInscricao])
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>
+
+  // Renovação de ciclo: a ficha anterior continua no histórico, mas o vínculo está inativo até a
+  // aluna responder a desta edição — então o formulário abre de novo em vez da tela de "já enviada".
+  const renovacaoPendente = minhaInscricao?.acesso_ativo === false
+  const submitted = enviadaAgora || (fichaEntregue && !renovacaoPendente)
 
   // Enquanto a inscrição não é aprovada, a aluna vê o andamento — não o formulário de matrícula.
   if (!minhaInscricao || minhaInscricao.status !== 'APROVADA') {
@@ -148,8 +159,8 @@ export default function FichaConfirmacao() {
             <BellRing className="h-5 w-5" /> Atenção à primeira aula
           </p>
           <p className="mt-1 text-sm">
-            A participação na primeira aula é obrigatória. A data será divulgada no Mural de Avisos;
-            acompanhe o mural regularmente.
+            Fique atenta, nos próximos dois dias você receberá todas as instruções da sua aula
+            inaugural. A data também aparece nos seus avisos e no Mural.
           </p>
         </div>
         <Button className="mt-6" onClick={() => navigate('/aluna/dashboard')}>
@@ -184,6 +195,19 @@ export default function FichaConfirmacao() {
     }
     setValues((p) => {
       const proximo = { ...p, [n]: v }
+      if (n === 'renda_familiar_total' || n === 'pessoas_residencia') {
+        const perCapita = calcularRendaPerCapita(
+          proximo.renda_familiar_total,
+          proximo.pessoas_residencia,
+        )
+        if (perCapita == null) {
+          delete proximo.renda_per_capita
+          delete proximo.renda_familiar
+        } else {
+          proximo.renda_per_capita = formatarReal(perCapita)
+          proximo.renda_familiar = faixaDaRenda(perCapita)
+        }
+      }
       if (n === 'tem_filhos' && v !== 'Sim') {
         delete proximo.tem_rede_apoio_filhos
         delete proximo.precisa_levar_filhos
@@ -218,13 +242,13 @@ export default function FichaConfirmacao() {
     for (const f of section.fields) {
       if (!campoVisivel(f)) continue
       if (f.required && f.type === 'checkbox' && !values[f.name]) return false
-      else if (
-        f.required &&
-        f.type === 'profession' &&
-        !/^\d{4}-\d{2} - .+/.test(values[f.name] ?? '')
-      )
+      else if (f.required && f.type === 'profession' && !String(values[f.name] ?? '').trim())
         return false
-      else if (f.required && f.type === 'children') {
+      else if (f.required && f.type === 'number') {
+        const numero = Number(String(values[f.name] ?? '').replace(',', '.'))
+        if (!Number.isFinite(numero)) return false
+        if (f.min != null && numero < f.min) return false
+      } else if (f.required && f.type === 'children') {
         const criancas = values[f.name]
         if (
           !Array.isArray(criancas) ||
@@ -240,7 +264,13 @@ export default function FichaConfirmacao() {
           return false
       } else if (f.required && f.type !== 'checkbox' && !values[f.name]) return false
     }
-    if (step === totalSteps && (!files.foto_rg || !files.foto_cpf || !files.foto_perfil))
+    if (
+      step === totalSteps &&
+      (!files.foto_rg ||
+        !files.foto_cpf ||
+        !files.foto_perfil ||
+        !files.foto_comprovante_residencia)
+    )
       return false
     return true
   }
@@ -275,8 +305,9 @@ export default function FichaConfirmacao() {
       fd.append('foto_rg', files.foto_rg)
       fd.append('foto_cpf', files.foto_cpf)
       fd.append('foto_perfil', files.foto_perfil)
+      fd.append('foto_comprovante_residencia', files.foto_comprovante_residencia)
       await submitConfirmacao(fd)
-      setSubmitted(true)
+      setEnviadaAgora(true)
       toast({ title: 'Ficha enviada com sucesso!' })
     } catch (err: any) {
       toast({
@@ -335,6 +366,7 @@ export default function FichaConfirmacao() {
                 { n: 'foto_rg', l: 'Foto do RG' },
                 { n: 'foto_cpf', l: 'Foto do CPF' },
                 { n: 'foto_perfil', l: 'Foto de Perfil' },
+                { n: 'foto_comprovante_residencia', l: 'Comprovante de Residência' },
               ].map((d) => (
                 <div key={d.n} className="space-y-2">
                   <Label>{d.l}</Label>

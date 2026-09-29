@@ -1,19 +1,29 @@
 package br.org.atkdgv.forcafeminina.web;
 
+import br.org.atkdgv.forcafeminina.domain.CicloAluna;
 import br.org.atkdgv.forcafeminina.domain.DocumentoAnexo;
 import br.org.atkdgv.forcafeminina.domain.FichaConfirmacao;
 import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
+import br.org.atkdgv.forcafeminina.domain.Notificacao;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
+import br.org.atkdgv.forcafeminina.domain.TemplateMensagem;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.DocumentoAnexoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaConfirmacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
+import br.org.atkdgv.forcafeminina.service.CicloService;
 import br.org.atkdgv.forcafeminina.service.FileStorageService;
+import br.org.atkdgv.forcafeminina.service.NotificacaoService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
@@ -38,23 +48,36 @@ public class ConfirmacaoController {
   /** Prazo final da edição IV — depois disso a vaga é cancelada automaticamente. */
   private static final Instant DEADLINE = Instant.parse("2026-12-31T23:59:59Z");
 
+  private static final Locale BRASIL = Locale.of("pt", "BR");
+
+  /** Tetos das faixas de renda per capita da pergunta 31 da ficha oficial. */
+  private static final BigDecimal FAIXA_BAIXA = new BigDecimal("210");
+
+  private static final BigDecimal FAIXA_MEDIA = new BigDecimal("670");
+
   private final FichaConfirmacaoRepository confirmacoes;
   private final FichaInscricaoRepository inscricoes;
   private final DocumentoAnexoRepository documentos;
   private final FileStorageService files;
   private final ObjectMapper objectMapper;
+  private final CicloService ciclos;
+  private final NotificacaoService notificacoes;
 
   public ConfirmacaoController(
       FichaConfirmacaoRepository confirmacoes,
       FichaInscricaoRepository inscricoes,
       DocumentoAnexoRepository documentos,
       FileStorageService files,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      CicloService ciclos,
+      NotificacaoService notificacoes) {
     this.confirmacoes = confirmacoes;
     this.inscricoes = inscricoes;
     this.documentos = documentos;
     this.files = files;
     this.objectMapper = objectMapper;
+    this.ciclos = ciclos;
+    this.notificacoes = notificacoes;
   }
 
   @PostMapping(value = "/confirmacao", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -63,13 +86,10 @@ public class ConfirmacaoController {
       @RequestParam Map<String, String> params,
       @RequestPart(value = "foto_rg", required = false) MultipartFile fotoRg,
       @RequestPart(value = "foto_cpf", required = false) MultipartFile fotoCpf,
-      @RequestPart(value = "foto_perfil", required = false) MultipartFile fotoPerfil) {
+      @RequestPart(value = "foto_perfil", required = false) MultipartFile fotoPerfil,
+      @RequestPart(value = "foto_comprovante_residencia", required = false)
+          MultipartFile comprovanteResidencia) {
     Usuario atual = CurrentUser.require(Perfil.ALUNA_FF);
-
-    if (confirmacoes.existsByUserId(atual.getId())) {
-      throw new ApiException(
-          HttpStatus.CONFLICT, "duplicate", "Ficha de confirmação já preenchida.");
-    }
 
     FichaInscricao inscricao =
         inscricoes
@@ -78,6 +98,14 @@ public class ConfirmacaoController {
                 () ->
                     new ApiException(
                         HttpStatus.FORBIDDEN, "no_inscricao", "Inscrição não encontrada."));
+
+    // A ficha é uma por ciclo: a renovação abre um ciclo novo e libera o preenchimento de novo,
+    // sem sobrescrever a ficha da edição anterior.
+    CicloAluna ciclo = ciclos.cicloAberto(inscricao);
+    if (confirmacoes.existsByUserIdAndCicloId(atual.getId(), ciclo.getId())) {
+      throw new ApiException(
+          HttpStatus.CONFLICT, "duplicate", "Ficha de confirmação já preenchida.");
+    }
 
     if (inscricao.getStatus() != StatusInscricao.APROVADA) {
       throw new ApiException(
@@ -102,7 +130,7 @@ public class ConfirmacaoController {
           HttpStatus.BAD_REQUEST, "bad_request", "É necessário aceitar os termos da LGPD.");
     }
 
-    validarDadosProfissionais(params.get("secao_3_dados"));
+    String secao3 = validarDadosProfissionais(params.get("secao_3_dados"));
     validarDadosCriancas(params.get("secao_6_socioeconomico"));
 
     if (fotoRg == null || fotoRg.isEmpty()) {
@@ -114,15 +142,20 @@ public class ConfirmacaoController {
     if (fotoPerfil == null || fotoPerfil.isEmpty()) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "Foto de perfil é obrigatória.");
     }
+    if (comprovanteResidencia == null || comprovanteResidencia.isEmpty()) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "bad_request", "Comprovante de residência é obrigatório.");
+    }
 
     FichaConfirmacao conf = new FichaConfirmacao();
     conf.setUserId(atual.getId());
     conf.setInscricaoId(inscricao.getId());
+    conf.setCicloId(ciclo.getId());
     conf.setStatus("PREENCHIDA");
     conf.setAceiteLgpd(true);
     conf.setSecao1Dados(normalizeJson(params.get("secao_1_dados")));
     conf.setSecao2Dados(normalizeJson(params.get("secao_2_dados")));
-    conf.setSecao3Dados(normalizeJson(params.get("secao_3_dados")));
+    conf.setSecao3Dados(normalizeJson(secao3));
     conf.setSecao4Dados(normalizeJson(params.get("secao_4_dados")));
     conf.setSecao5Dados(normalizeJson(params.get("secao_5_dados")));
     conf.setSecao6Socioeconomico(normalizeJson(params.get("secao_6_socioeconomico")));
@@ -133,6 +166,12 @@ public class ConfirmacaoController {
     saveDocumento(conf.getId(), "RG", fotoRg);
     saveDocumento(conf.getId(), "CPF", fotoCpf);
     saveDocumento(conf.getId(), "PERFIL", fotoPerfil);
+    saveDocumento(conf.getId(), "COMPROVANTE_RESIDENCIA", comprovanteResidencia);
+
+    // Responder a ficha fecha a pendência do ciclo e é o que devolve o acesso depois de uma
+    // renovação. Para quem está no fluxo normal, é uma reafirmação sem efeito colateral.
+    ciclos.registrarRespostaDaFicha(inscricao, conf.getId());
+    avisarPosEnvio(atual, inscricao, conf);
 
     return ResponseEntity.status(HttpStatus.CREATED).body(conf);
   }
@@ -147,7 +186,7 @@ public class ConfirmacaoController {
   public ResponseEntity<FichaConfirmacao> minha() {
     Usuario atual = CurrentUser.get();
     return confirmacoes
-        .findByUserId(atual.getId())
+        .findFirstByUserIdOrderByCreatedDesc(atual.getId())
         .map(ResponseEntity::ok)
         .orElse(ResponseEntity.noContent().build());
   }
@@ -220,6 +259,39 @@ public class ConfirmacaoController {
       conf.setSecao7Violencia(json);
     }
     return confirmacoes.save(conf);
+  }
+
+  /**
+   * Dispara os dois avisos do fluxo pós-ficha: a mensagem automática para a aluna, já com o texto
+   * cadastrado em {@code templates_mensagem}, e a entrada da gestão na fila de "fichas aguardando
+   * definição da 1ª aula".
+   *
+   * <p>Os dois envios são idempotentes por ficha, então reenviar não gera mensagem duplicada.
+   */
+  private void avisarPosEnvio(Usuario aluna, FichaInscricao inscricao, FichaConfirmacao conf) {
+    notificacoes.enviarPorTemplate(
+        TemplateMensagem.POS_FICHA_CONFIRMACAO,
+        Notificacao.TIPO_POS_FICHA_CONFIRMACAO,
+        aluna.getId(),
+        conf.getId(),
+        Map.of("nome", inscricao.getNomeCompleto()));
+
+    notificacoes.enviarParaPerfil(
+        Notificacao.TIPO_FICHA_AGUARDANDO_DATA,
+        Perfil.GESTAO_GERAL,
+        "Ficha de confirmação aguardando a data da 1ª aula",
+        inscricao.getNomeCompleto()
+            + " enviou a ficha de confirmação. Defina a data da primeira aula para que ela seja "
+            + "avisada.",
+        conf.getId());
+    notificacoes.enviarParaPerfil(
+        Notificacao.TIPO_FICHA_AGUARDANDO_DATA,
+        Perfil.ADMINISTRATIVO,
+        "Ficha de confirmação aguardando a data da 1ª aula",
+        inscricao.getNomeCompleto()
+            + " enviou a ficha de confirmação. Defina a data da primeira aula para que ela seja "
+            + "avisada.",
+        conf.getId() + ":ADM");
   }
 
   private void saveDocumento(String confirmacaoId, String tipo, MultipartFile file) {
@@ -305,7 +377,11 @@ public class ConfirmacaoController {
     }
   }
 
-  private void validarDadosProfissionais(String secaoProfissional) {
+  /**
+   * Confere os dados profissionais e devolve a seção já com a renda per capita recalculada — é esse
+   * JSON que deve ser gravado, não o que veio da tela.
+   */
+  private String validarDadosProfissionais(String secaoProfissional) {
     try {
       JsonNode dados = objectMapper.readTree(secaoProfissional);
       String situacao = dados.path("situacao_trabalho").asText("").trim();
@@ -315,15 +391,18 @@ public class ConfirmacaoController {
             "situacao_trabalho_obrigatoria",
             "Informe primeiro a sua situação de trabalho.");
       }
-      if ("Desempregada".equals(situacao)) return;
+      validarRendaPerCapita(dados);
+      // Desempregada não informa profissão; o resto da seção segue valendo.
+      if ("Desempregada".equals(situacao)) return objectMapper.writeValueAsString(dados);
 
+      // Profissão é texto livre desde que a busca na CBO saiu do formulário: continua obrigatória
+      // para quem não está desempregada, mas sem exigir o código da classificação.
       String profissao = dados.path("profissao").asText("").trim();
-      if (!profissao.matches("\\d{4}-\\d{2} - .+")) {
+      if (profissao.isEmpty()) {
         throw new ApiException(
-            HttpStatus.BAD_REQUEST,
-            "profissao_cbo_obrigatoria",
-            "Selecione uma profissão da lista oficial da CBO.");
+            HttpStatus.BAD_REQUEST, "profissao_obrigatoria", "Informe a sua profissão.");
       }
+      return objectMapper.writeValueAsString(dados);
     } catch (ApiException e) {
       throw e;
     } catch (Exception e) {
@@ -332,5 +411,56 @@ public class ConfirmacaoController {
           "dados_profissionais_invalidos",
           "Os dados profissionais estão inválidos.");
     }
+  }
+
+  /**
+   * Renda per capita = renda familiar total ÷ pessoas na residência. O valor e a faixa chegam
+   * calculados pela tela, mas são recalculados aqui e sobrescritos: o que a aluna vê é conferência,
+   * não a fonte do dado — e o cálculo é o que a Assistente Social usa nos relatórios.
+   */
+  private void validarRendaPerCapita(JsonNode dados) {
+    BigDecimal renda = numeroDe(dados.path("renda_familiar_total").asText(""));
+    BigDecimal pessoas = numeroDe(dados.path("pessoas_residencia").asText(""));
+
+    if (renda == null || renda.signum() < 0) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST,
+          "renda_invalida",
+          "Informe a renda familiar total (zero ou mais).");
+    }
+    if (pessoas == null || pessoas.compareTo(BigDecimal.ONE) < 0) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST,
+          "pessoas_residencia_invalida",
+          "Informe quantas pessoas moram na residência (pelo menos uma).");
+    }
+
+    BigDecimal perCapita = renda.divide(pessoas, 2, RoundingMode.HALF_UP);
+    if (dados instanceof ObjectNode secao) {
+      secao.put("renda_per_capita", formatarReal(perCapita));
+      secao.put("renda_familiar", faixaDaRenda(perCapita));
+    }
+  }
+
+  /** Aceita tanto "2400.00" quanto "2400,00", que é como o teclado brasileiro costuma mandar. */
+  private static BigDecimal numeroDe(String valor) {
+    String limpo = valor == null ? "" : valor.trim().replace(".", "").replace(",", ".");
+    if (limpo.isEmpty()) return null;
+    try {
+      return new BigDecimal(limpo);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  private static String formatarReal(BigDecimal valor) {
+    return NumberFormat.getCurrencyInstance(BRASIL).format(valor);
+  }
+
+  /** Faixa da renda per capita — os três rótulos da pergunta 31, iguais aos exibidos na tela. */
+  private static String faixaDaRenda(BigDecimal perCapita) {
+    if (perCapita.compareTo(FAIXA_BAIXA) <= 0) return "menor ou igual a R$ 210";
+    if (perCapita.compareTo(FAIXA_MEDIA) <= 0) return "entre R$ 211 e R$ 670";
+    return "maior que R$ 670";
   }
 }

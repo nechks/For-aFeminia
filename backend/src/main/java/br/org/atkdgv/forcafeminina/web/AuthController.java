@@ -1,5 +1,6 @@
 package br.org.atkdgv.forcafeminina.web;
 
+import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
@@ -124,11 +125,17 @@ public class AuthController {
    * real em vez do genérico "conta inativa".
    */
   private ApiException inactiveException(Usuario usuario) {
-    StatusInscricao status =
-        inscricoes
-            .findFirstByUserIdOrderByCreatedDesc(usuario.getId())
-            .map(f -> f.getStatus())
-            .orElse(null);
+    FichaInscricao ficha =
+        inscricoes.findFirstByUserIdOrderByCreatedDesc(usuario.getId()).orElse(null);
+    StatusInscricao status = ficha == null ? null : ficha.getStatus();
+    // Projeto finalizado: a inscrição segue aprovada, o que muda é o acesso do vínculo. A aluna
+    // volta a entrar quando a gestão renovar o ciclo e ela responder a nova ficha.
+    if (ficha != null && !ficha.isAcessoAtivo() && status == StatusInscricao.APROVADA) {
+      return new ApiException(
+          HttpStatus.FORBIDDEN,
+          "ciclo_encerrado",
+          "Seu ciclo foi encerrado. Aguarde contato da coordenação.");
+    }
     if (status == StatusInscricao.AGUARDANDO
         || status == StatusInscricao.EM_ANALISE
         || status == StatusInscricao.LISTA_ESPERA) {

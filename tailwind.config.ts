@@ -52,6 +52,15 @@ export default {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',
         },
+        rosa: {
+          DEFAULT: 'hsl(var(--rosa))',
+          foreground: 'hsl(var(--rosa-foreground))',
+        },
+        laranja: {
+          DEFAULT: 'hsl(var(--laranja))',
+          foreground: 'hsl(var(--laranja-foreground))',
+          texto: 'hsl(var(--laranja-texto))',
+        },
         accent: {
           DEFAULT: 'hsl(var(--accent))',
           foreground: 'hsl(var(--accent-foreground))',

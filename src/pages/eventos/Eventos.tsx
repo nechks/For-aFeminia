@@ -145,7 +145,7 @@ export default function Eventos() {
       role="button"
       onClick={() => abrirEvento(evento)}
     >
-      <CardContent className="pt-6">
+      <CardContent>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">

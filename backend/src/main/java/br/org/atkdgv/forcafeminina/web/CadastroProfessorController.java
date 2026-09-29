@@ -94,10 +94,7 @@ public class CadastroProfessorController {
     if (!cpf.isEmpty() && !isCpfValido(cpf)) {
       errors.put("cpf", "CPF inválido");
     }
-    String profissao = params.getOrDefault("profissao", "").trim();
-    if (!profissao.isEmpty() && !profissao.matches("\\d{4}-\\d{2} - .+")) {
-      errors.put("profissao", "Selecione uma profissão da lista oficial da CBO");
-    }
+    // A profissão já é cobrada pela lista OBRIGATORIOS; o formato da CBO saiu junto com a busca.
     validarEnderecos(params, errors);
     validarDadosBancarios(params, errors);
 

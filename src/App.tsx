@@ -12,6 +12,7 @@ import Inscricao from './pages/Inscricao'
 import CadastroProfessor from './pages/CadastroProfessor'
 import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import AdminInscricoes from './pages/admin/AdminInscricoes'
+import PrimeiraAula from './pages/admin/PrimeiraAula'
 import AdminUsuarios from './pages/admin/AdminUsuarios'
 import MuralManagement from './pages/admin/MuralManagement'
 import DashboardAluna from './pages/aluna/DashboardAluna'
@@ -20,6 +21,7 @@ import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
 import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
 import Atendimentos from './pages/professor/Atendimentos'
+import RegistroAulaPage from './pages/profissional/RegistroAulaPage'
 import Alertas from './pages/assistente/Alertas'
 import Eventos from './pages/eventos/Eventos'
 import Solicitacoes from './pages/solicitacoes/Solicitacoes'
@@ -28,6 +30,9 @@ import Relatorios from './pages/gestao/Relatorios'
 import Nucleos from './pages/gestao/Nucleos'
 import NucleoDetalhe from './pages/gestao/NucleoDetalhe'
 import Projetos from './pages/gestao/Projetos'
+import MunicipiosAtendidos from './pages/gestao/MunicipiosAtendidos'
+import HistoricoProfissionais from './pages/gestao/HistoricoProfissionais'
+import Evidencias from './pages/gestao/Evidencias'
 import { useEffect, useState } from 'react'
 import { getNucleos } from '@/services/nucleos'
 import { turmaLabels } from '@/lib/constants'
@@ -64,6 +69,15 @@ const AppRoutes = () => (
         element={
           <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL', 'ASSISTENTE_SOCIAL']}>
             <AdminInscricoes />
+          </ProtectedRoute>
+        }
+      />
+      {/* Fila do fluxo pós-ficha: define a data da 1ª aula e avisa a aluna. */}
+      <Route
+        path="/admin/primeira-aula"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <PrimeiraAula />
           </ProtectedRoute>
         }
       />
@@ -133,6 +147,30 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/gestao/municipios"
+        element={
+          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+            <MunicipiosAtendidos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/historico-profissionais"
+        element={
+          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+            <HistoricoProfissionais />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/gestao/evidencias"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <Evidencias />
+          </ProtectedRoute>
+        }
+      />
 
       <Route
         path="/aluna/dashboard"
@@ -190,6 +228,26 @@ const AppRoutes = () => (
             allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}
           >
             <Atendimentos />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profissional/evidencias"
+        element={
+          <ProtectedRoute
+            allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}
+          >
+            <RegistroAulaPage tipo="EVIDENCIA" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profissional/feedback"
+        element={
+          <ProtectedRoute
+            allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}
+          >
+            <RegistroAulaPage tipo="FEEDBACK" />
           </ProtectedRoute>
         }
       />

@@ -1,10 +1,10 @@
 import { Link, useLocation } from 'react-router-dom'
+import Logo from '@/components/Logo'
 import { useApp } from '@/store/app-context'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
-  Shield,
   LayoutDashboard,
   UserCheck,
   Calendar,
@@ -20,11 +20,17 @@ import {
   CircleUser,
   Building2,
   FolderKanban,
+  Camera,
+  MessageSquareText,
+  History,
+  CalendarCheck,
+  MapPin,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useMinhasTurmas } from '@/components/turmas/MinhasTurmas'
+import NotificacoesPopover from '@/components/NotificacoesPopover'
 import { fileUrl } from '@/lib/api/client'
 
 interface NavItem {
@@ -50,6 +56,12 @@ const navItems: NavItem[] = [
     roles: ['ADMINISTRATIVO', 'GESTAO_GERAL', 'ASSISTENTE_SOCIAL'],
   },
   {
+    title: '1ª Aula',
+    href: '/admin/primeira-aula',
+    icon: CalendarCheck,
+    roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
+  },
+  {
     title: 'Usuários',
     href: '/admin/usuarios',
     icon: UserCog,
@@ -68,12 +80,30 @@ const navItems: NavItem[] = [
     roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
   },
   {
+    title: 'Evidências',
+    href: '/gestao/evidencias',
+    icon: Camera,
+    roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
+  },
+  {
+    title: 'Histórico',
+    href: '/gestao/historico-profissionais',
+    icon: History,
+    roles: ['GESTAO_GERAL'],
+  },
+  {
     title: 'Núcleos',
     href: '/gestao/nucleos',
     icon: Building2,
     roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
   },
   { title: 'Projetos', href: '/gestao/projetos', icon: FolderKanban, roles: ['GESTAO_GERAL'] },
+  {
+    title: 'Municípios',
+    href: '/gestao/municipios',
+    icon: MapPin,
+    roles: ['GESTAO_GERAL'],
+  },
   { title: 'Meu Painel', href: '/aluna/dashboard', icon: LayoutDashboard, roles: ['ALUNA_FF'] },
   {
     title: 'Meu Perfil',
@@ -84,6 +114,18 @@ const navItems: NavItem[] = [
   { title: 'Ficha de Confirmação', href: '/aluna/ficha', icon: FileText, roles: ['ALUNA_FF'] },
   { title: 'Calendário', href: '/aluna/calendario', icon: Calendar, roles: ['ALUNA_FF'] },
   { title: 'Chamada', href: '/professor/chamada', icon: UserCheck, roles: ['PROFESSOR'] },
+  {
+    title: 'Evidências',
+    href: '/profissional/evidencias',
+    icon: Camera,
+    roles: ['PROFESSOR', 'ASSISTENTE_SOCIAL'],
+  },
+  {
+    title: 'Feedback',
+    href: '/profissional/feedback',
+    icon: MessageSquareText,
+    roles: ['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL'],
+  },
   {
     title: 'Atendimentos',
     href: '/atendimentos',
@@ -132,11 +174,23 @@ function filtrarItensAluna(items: NavItem[], perfil: string, alunaLiberada: bool
  * As permissões da equipe valem por turma: a mesma pessoa pode ser professora numa turma e monitora
  * em outra. O item Chamada só some quando nenhum dos vínculos permite fazer chamada.
  */
-function filtrarItensEquipe(items: NavItem[], perfil: string, podeAlgumaChamada: boolean): NavItem[] {
+function filtrarItensEquipe(
+  items: NavItem[],
+  perfil: string,
+  podeAlgumaChamada: boolean,
+  possuiVinculoProfissional: boolean,
+): NavItem[] {
+  let filtrados = items
   if (perfil !== 'ALUNA_FF' && !podeAlgumaChamada) {
-    return items.filter((item) => item.href !== '/professor/chamada')
+    filtrados = filtrados.filter((item) => item.href !== '/professor/chamada')
   }
-  return items
+  if (!possuiVinculoProfissional) {
+    filtrados = filtrados.filter(
+      (item) =>
+        item.href !== '/profissional/evidencias' && item.href !== '/profissional/feedback',
+    )
+  }
+  return filtrados
 }
 
 export function Sidebar() {
@@ -154,12 +208,13 @@ export function Sidebar() {
     ),
     user.perfil,
     turmas.some((t) => (t.chamadas_permitidas ?? []).length > 0),
+    Boolean(user.tipo_profissional || turmas.length),
   )
 
   return (
     <div className="hidden md:flex w-64 flex-col bg-card border-r min-h-screen z-10 shadow-sm">
       <div className="h-16 flex items-center px-6 border-b border-border/50">
-        <Shield className="w-6 h-6 text-primary mr-2" />
+        <Logo className="mr-2 h-9 w-9" />
         <span className="font-bold text-lg text-primary tracking-tight">ATKDGV</span>
       </div>
       <ScrollArea className="flex-1 py-6 px-3">
@@ -224,10 +279,13 @@ export function TopHeader() {
     ),
     user.perfil,
     turmas.some((t) => (t.chamadas_permitidas ?? []).length > 0),
+    Boolean(user.tipo_profissional || turmas.length),
   )
 
   return (
     <header className="h-16 flex items-center justify-between px-4 md:px-6 bg-card border-b sticky top-0 z-20 shadow-sm">
+      {/* Faixa com as cores da camisa do projeto: roxo, rosa e laranja. */}
+      <div className="absolute inset-x-0 top-0 h-1 bg-marca" aria-hidden />
       <div className="flex items-center md:hidden">
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
@@ -237,7 +295,7 @@ export function TopHeader() {
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-0 flex flex-col">
             <div className="h-16 flex items-center px-6 border-b border-border/50">
-              <Shield className="w-6 h-6 text-primary mr-2" />
+              <Logo className="mr-2 h-9 w-9" />
               <span className="font-bold text-lg text-primary">ATKDGV</span>
             </div>
             <div className="flex-1 py-4 px-3 space-y-1">
@@ -296,9 +354,7 @@ export function TopHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="text-muted-foreground rounded-full">
-          <Bell className="w-5 h-5" />
-        </Button>
+        <NotificacoesPopover />
         <Button
           variant="ghost"
           size="icon"

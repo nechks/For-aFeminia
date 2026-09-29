@@ -31,11 +31,13 @@ export function ApprovalDialog({ open, onOpenChange, onConfirm }: ApprovalProps)
         <DialogHeader>
           <DialogTitle>Aprovar Inscrição</DialogTitle>
           <DialogDescription>
-            Selecione a data da primeira aula da candidata aprovada.
+            Aprovar libera o preenchimento da ficha de confirmação. A data da primeira aula é
+            opcional aqui — o normal é defini-la depois que a aluna enviar a ficha, na tela
+            &ldquo;Fichas aguardando a 1ª aula&rdquo;, que é o momento em que ela recebe o aviso.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
-          <Label htmlFor="data_primeira_aula">Data da Primeira Aula</Label>
+          <Label htmlFor="data_primeira_aula">Data da Primeira Aula (opcional)</Label>
           <Input
             id="data_primeira_aula"
             type="date"
@@ -47,9 +49,7 @@ export function ApprovalDialog({ open, onOpenChange, onConfirm }: ApprovalProps)
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Voltar
           </Button>
-          <Button disabled={!date} onClick={() => onConfirm(date)}>
-            Confirmar Aprovação
-          </Button>
+          <Button onClick={() => onConfirm(date)}>Confirmar Aprovação</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

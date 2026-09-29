@@ -15,7 +15,6 @@ import type { FormField } from '@/lib/confirmacao-fields'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Baby, Plus, Trash2 } from 'lucide-react'
-import { ProfissaoAutocomplete } from '@/components/ProfissaoAutocomplete'
 
 interface FieldRendererProps {
   field: FormField
@@ -30,14 +29,18 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     field.required && "after:content-['*'] after:ml-0.5 after:text-red-500",
   )
 
+  // Profissão é texto livre: a busca na Classificação Brasileira de Ocupações foi retirada por
+  // dificultar o preenchimento — quem responde nem sempre reconhece o próprio trabalho na lista.
   if (field.type === 'profession') {
     return (
       <div className="space-y-2">
         <Label className={labelClass}>{field.label}</Label>
-        <ProfissaoAutocomplete value={value || ''} onChange={onChange} disabled={field.readonly} />
-        <p className="text-xs text-muted-foreground">
-          Pesquise e selecione uma ocupação da Classificação Brasileira de Ocupações.
-        </p>
+        <Input
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={field.readonly}
+          placeholder="Ex.: costureira, diarista, vendedora"
+        />
       </div>
     )
   }
@@ -104,6 +107,134 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
             </Button>
           </div>
         ))}
+      </div>
+    )
+  }
+
+  // Valor derivado de outros campos (renda per capita e a faixa dela). A usuária confere, mas não
+  // digita — quem calcula é a página, que enxerga os campos irmãos.
+  if (field.type === 'computed') {
+    return (
+      <div className="space-y-2">
+        <Label className={labelClass}>{field.label}</Label>
+        <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">
+          {value ? String(value) : '—'}
+        </div>
+        {field.hint && <p className="text-xs text-muted-foreground">{field.hint}</p>}
+      </div>
+    )
+  }
+
+  if (field.type === 'number') {
+    return (
+      <div className="space-y-2">
+        <Label className={labelClass}>{field.label}</Label>
+        <Input
+          type="number"
+          inputMode="decimal"
+          min={field.min}
+          step={field.step}
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={field.placeholder}
+          disabled={field.readonly}
+        />
+        {field.hint && <p className="text-xs text-muted-foreground">{field.hint}</p>}
+      </div>
+    )
+  }
+
+  // Bens da família: cada item marcado carrega a quantidade que a família tem.
+  if (field.type === 'multi-select-qtd') {
+    const itens: { item: string; quantidade: number }[] = Array.isArray(value)
+      ? value.map((registro: any) =>
+          typeof registro === 'string'
+            ? { item: registro, quantidade: 1 }
+            : { item: String(registro?.item ?? ''), quantidade: Number(registro?.quantidade) || 1 },
+        )
+      : []
+    const opcoes = Array.from(new Set([...(field.options ?? []), ...itens.map((i) => i.item)]))
+    const quantidadeDe = (item: string) => itens.find((i) => i.item === item)?.quantidade
+    const alternarItem = (item: string, marcado: boolean) =>
+      onChange(
+        marcado
+          ? [...itens, { item, quantidade: 1 }]
+          : itens.filter((atual) => atual.item !== item),
+      )
+    const mudarQuantidade = (item: string, quantidade: string) =>
+      onChange(
+        itens.map((atual) =>
+          atual.item === item
+            ? { ...atual, quantidade: Math.max(1, Number(quantidade) || 1) }
+            : atual,
+        ),
+      )
+    const adicionarItem = () => {
+      const item = novoItem.trim()
+      if (!item) return
+      if (!itens.some((atual) => atual.item.toLocaleLowerCase() === item.toLocaleLowerCase())) {
+        onChange([...itens, { item, quantidade: 1 }])
+      }
+      setNovoItem('')
+    }
+    return (
+      <div className="space-y-3">
+        <Label className={labelClass}>{field.label}</Label>
+        {field.hint && <p className="text-xs text-muted-foreground">{field.hint}</p>}
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {opcoes.map((item) => {
+            const marcado = itens.some((atual) => atual.item === item)
+            return (
+              <div
+                key={item}
+                className={cn(
+                  'flex items-center gap-2 rounded-md border p-3 text-sm',
+                  marcado && 'border-primary bg-primary/5',
+                )}
+              >
+                <label className="flex flex-1 cursor-pointer items-center gap-2">
+                  <Checkbox
+                    checked={marcado}
+                    onCheckedChange={(checked) => alternarItem(item, checked === true)}
+                  />
+                  <span>{item}</span>
+                </label>
+                {marcado && (
+                  <Input
+                    type="number"
+                    min={1}
+                    step="1"
+                    aria-label={`Quantidade de ${item}`}
+                    className="h-8 w-20"
+                    value={quantidadeDe(item) ?? 1}
+                    onChange={(e) => mudarQuantidade(item, e.target.value)}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={novoItem}
+            onChange={(e) => setNovoItem(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                adicionarItem()
+              }
+            }}
+            placeholder={field.placeholder}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={adicionarItem}
+            disabled={!novoItem.trim()}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Adicionar item
+          </Button>
+        </div>
       </div>
     )
   }

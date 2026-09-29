@@ -4,6 +4,7 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { getInscricoesPaginated, type PaginatedInscricoes } from '@/services/ficha-inscricao'
 import { FichaInscricaoFF } from '@/lib/types'
 import { getStatusInfo, turmaLabels, statusInfo } from '@/lib/constants'
+import { CRITERIO_ZONA, PONTUACAO_MAXIMA, TOTAL_CRITERIOS } from '@/lib/pontuacao'
 import { InscricaoDetailDialog } from '@/components/admin/InscricaoDetailDialog'
 import { ApprovalDialog, CancellationDialog } from '@/components/admin/ActionDialogs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -39,7 +40,10 @@ import { toast } from '@/components/ui/use-toast'
 const PER_PAGE = 10
 
 export default function AdminInscricoes() {
-  const { updateInscricaoStatus, isAuthenticated } = useApp()
+  const { updateInscricaoStatus, isAuthenticated, user } = useApp()
+  // Somente o Administrativo analisa e decide inscrições; os demais perfis apenas consultam.
+  const podeAnalisarInscricao = user?.perfil === 'ADMINISTRATIVO'
+  const podeDecidirVagaCrianca = podeAnalisarInscricao
   const [data, setData] = useState<PaginatedInscricoes | null>(null)
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState('ALL')
@@ -101,15 +105,24 @@ export default function AdminInscricoes() {
 
   const handleApprove = async (date: string) => {
     if (!approvalId) return
-    const { error } = await updateInscricaoStatus(approvalId, 'APROVADA', {
-      data_primeira_aula: date,
-    })
+    // A data da 1ª aula é opcional na aprovação: o fluxo normal define depois do envio da ficha
+    // de confirmação, e é lá que a aluna recebe o aviso.
+    const { error } = await updateInscricaoStatus(
+      approvalId,
+      'APROVADA',
+      date ? { data_primeira_aula: date } : undefined,
+    )
     if (error) {
       toast({ title: 'Erro ao aprovar', variant: 'destructive' })
       return
     }
     setApprovalId(null)
-    toast({ title: 'Inscrição Aprovada!', description: 'Aluna notificada.' })
+    toast({
+      title: 'Inscrição Aprovada!',
+      description: date
+        ? 'Aluna notificada.'
+        : 'A aluna já pode preencher a ficha de confirmação.',
+    })
     loadData()
   }
 
@@ -162,7 +175,11 @@ export default function AdminInscricoes() {
       <Card>
         <CardHeader>
           <CardTitle>Inscrições Recebidas</CardTitle>
-          <CardDescription>Lista completa de cadastros realizados pelo portal.</CardDescription>
+          <CardDescription>
+            Ordenadas pela pontuação dos critérios de prioridade. Em caso de empate, leia o relato
+            da candidata para concluir a análise. Morar na cidade e na zona prioritária do núcleo
+            vale 80 dos {PONTUACAO_MAXIMA} pontos; os outros nove critérios dividem os 20 restantes.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -208,8 +225,10 @@ export default function AdminInscricoes() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome da Aluna</TableHead>
+                  <TableHead>Prioridade</TableHead>
                   <TableHead>CPF</TableHead>
                   <TableHead>Turma</TableHead>
+                  <TableHead>Relato para desempate</TableHead>
                   <TableHead>Data Cadastro</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -218,13 +237,13 @@ export default function AdminInscricoes() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                       Nenhum registro encontrado.
                     </TableCell>
                   </TableRow>
@@ -243,9 +262,26 @@ export default function AdminInscricoes() {
                         <TableCell className="font-medium">
                           {safeStr(inscricao.nome_completo) || '—'}
                         </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="whitespace-nowrap font-semibold">
+                            {inscricao.pontuacao_prioridade ?? 0} pontos
+                          </Badge>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {inscricao.criterios_prioridade?.includes(CRITERIO_ZONA)
+                              ? 'Zona prioritária'
+                              : 'Fora da zona prioritária'}{' '}
+                            · {inscricao.criterios_prioridade?.length ?? 0}/{TOTAL_CRITERIOS}{' '}
+                            critérios
+                          </p>
+                        </TableCell>
                         <TableCell>{safeStr(inscricao.cpf) || '—'}</TableCell>
                         <TableCell className="text-muted-foreground">
                           {turmaLabels[inscricao.turma ?? ''] ?? (safeStr(inscricao.turma) || '—')}
+                        </TableCell>
+                        <TableCell className="max-w-[280px]">
+                          <p className="line-clamp-3 text-sm text-muted-foreground">
+                            {inscricao.motivo_participar || 'Sem relato informado'}
+                          </p>
                         </TableCell>
                         <TableCell>{created}</TableCell>
                         <TableCell>
@@ -266,22 +302,26 @@ export default function AdminInscricoes() {
                               <DropdownMenuItem onClick={() => setDetailInscricao(inscricao)}>
                                 Ver Detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setApprovalId(inscricao.id)}>
-                                Aprovar Vaga
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleAnalyze(inscricao.id)}>
-                                Marcar em Análise
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleWaitlist(inscricao.id)}>
-                                Lista de Espera
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={() => setCancelId(inscricao.id)}
-                              >
-                                Cancelar Inscrição
-                              </DropdownMenuItem>
+                              {podeAnalisarInscricao && (
+                                <>
+                                  <DropdownMenuItem onClick={() => setApprovalId(inscricao.id)}>
+                                    Aprovar Vaga
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleAnalyze(inscricao.id)}>
+                                    Marcar em Análise
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleWaitlist(inscricao.id)}>
+                                    Lista de Espera
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={() => setCancelId(inscricao.id)}
+                                  >
+                                    Cancelar Inscrição
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -325,6 +365,7 @@ export default function AdminInscricoes() {
         inscricao={detailInscricao}
         open={!!detailInscricao}
         onOpenChange={(open) => !open && setDetailInscricao(null)}
+        podeDecidirVagaCrianca={podeDecidirVagaCrianca}
       />
       <ApprovalDialog
         open={!!approvalId}

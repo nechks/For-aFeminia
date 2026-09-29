@@ -201,7 +201,7 @@ public class UsuarioController {
     ficha.setTurma(req.turma());
     ficha.setTurmaId(null);
     fichas.save(ficha);
-    confirmacoes.findByUserId(id).ifPresent(conf -> atualizarTurmaConfirmacao(conf, req.turma()));
+    confirmacoes.findFirstByUserIdOrderByCreatedDesc(id).ifPresent(conf -> atualizarTurmaConfirmacao(conf, req.turma()));
     return usuarios.save(aluna);
   }
 

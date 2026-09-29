@@ -1,15 +1,11 @@
 package br.org.atkdgv.forcafeminina.web;
 
 import br.org.atkdgv.forcafeminina.domain.Perfil;
+import br.org.atkdgv.forcafeminina.domain.Nucleo;
 import br.org.atkdgv.forcafeminina.domain.Solicitacao;
-import br.org.atkdgv.forcafeminina.domain.TipoProfissional;
-import br.org.atkdgv.forcafeminina.domain.Turma;
-import br.org.atkdgv.forcafeminina.domain.TurmaEquipe;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.SolicitacaoRepository;
-import br.org.atkdgv.forcafeminina.repo.TurmaEquipeRepository;
-import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -35,33 +31,26 @@ public class SolicitacaoController {
   public static final String TIPO_CADASTRO_PROFESSOR = "CADASTRO_PROFESSOR";
 
   private final SolicitacaoRepository solicitacoes;
+  private final NucleoRepository nucleos;
   private final UsuarioRepository usuarios;
   private final PasswordEncoder passwordEncoder;
   private final ObjectMapper objectMapper;
-  private final NucleoRepository nucleos;
-  private final TurmaRepository turmas;
-  private final TurmaEquipeRepository equipe;
 
-  private static final List<String> TIPOS_PROFISSIONAIS = TipoProfissional.TODOS;
 
   public SolicitacaoController(
       SolicitacaoRepository solicitacoes,
+      NucleoRepository nucleos,
       UsuarioRepository usuarios,
       PasswordEncoder passwordEncoder,
-      ObjectMapper objectMapper,
-      NucleoRepository nucleos,
-      TurmaRepository turmas,
-      TurmaEquipeRepository equipe) {
+      ObjectMapper objectMapper) {
     this.solicitacoes = solicitacoes;
+    this.nucleos = nucleos;
     this.usuarios = usuarios;
     this.passwordEncoder = passwordEncoder;
     this.objectMapper = objectMapper;
-    this.nucleos = nucleos;
-    this.turmas = turmas;
-    this.equipe = equipe;
   }
 
-  public record CriacaoAlunaRequest(String name, String email, String password) {}
+  public record CriacaoAlunaRequest(String name, String email, String password, String nucleo) {}
 
   /**
    * Assistente Social só pode criar conta de aluna via solicitação — quem aprova é a Gestão
@@ -80,16 +69,34 @@ public class SolicitacaoController {
       throw new ApiException(
           HttpStatus.BAD_REQUEST, "validation_error", "A senha deve ter pelo menos 8 caracteres.");
     }
+    if (req.nucleo() == null || req.nucleo().isBlank()) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "validation_error", "Núcleo é obrigatório.");
+    }
+    Nucleo nucleo =
+        nucleos
+            .findByCodigo(req.nucleo().trim())
+            .filter(Nucleo::isAtivo)
+            .orElseThrow(
+                () ->
+                    new ApiException(
+                        HttpStatus.BAD_REQUEST,
+                        "nucleo_invalido",
+                        "O núcleo selecionado não existe ou está inativo."));
     if (usuarios.existsByEmailIgnoreCase(req.email().trim())) {
       throw new ApiException(HttpStatus.CONFLICT, "email_duplicate", "E-mail já cadastrado.");
     }
 
     Solicitacao s = new Solicitacao();
     s.setTipo(TIPO_CRIACAO_ALUNA);
+    s.setNucleo(nucleo.getCodigo());
     try {
       s.setDados(
           objectMapper.writeValueAsString(
-              Map.of("name", req.name().trim(), "email", req.email().trim().toLowerCase())));
+              Map.of(
+                  "name", req.name().trim(),
+                  "email", req.email().trim().toLowerCase(),
+                  "nucleo", nucleo.getCodigo())));
     } catch (Exception e) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "Dados inválidos.");
     }
@@ -120,15 +127,15 @@ public class SolicitacaoController {
         TIPO_CRIACAO_ALUNA, "PENDENTE");
   }
 
-  public record AprovarRequest(
-      String nucleo,
-      @com.fasterxml.jackson.annotation.JsonProperty("turma_id") String turmaId,
-      @com.fasterxml.jackson.annotation.JsonProperty("tipo_profissional") String tipoProfissional) {}
-
+  /**
+   * Aprovação do cadastro de profissional é só a validação do cadastro: nada de projeto, núcleo,
+   * turma ou tipo profissional aqui. O vínculo com o projeto é feito no cadastro do projeto e o
+   * vínculo com a turma/núcleo na tela do núcleo — um professor pode estar em vários projetos ao
+   * mesmo tempo, o que um campo único na aprovação não permitia.
+   */
   @PatchMapping("/{id}/aprovar")
   @Transactional
-  public Solicitacao aprovar(
-      @PathVariable String id, @RequestBody(required = false) AprovarRequest req) {
+  public Solicitacao aprovar(@PathVariable String id) {
     Usuario atual = CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
     Solicitacao s = loadPendente(id);
     if (atual.getPerfil() == Perfil.ADMINISTRATIVO
@@ -137,28 +144,9 @@ public class SolicitacaoController {
     }
 
     if (TIPO_CRIACAO_ALUNA.equals(s.getTipo())) {
-      criarConta(s, Perfil.ALUNA_FF, null);
+      criarConta(s, Perfil.ALUNA_FF, s.getNucleo());
     } else if (TIPO_CADASTRO_PROFESSOR.equals(s.getTipo())) {
-      String nucleo = req == null ? null : req.nucleo();
-      String turmaId = req == null ? null : req.turmaId();
-      String tipoProfissional = req == null ? null : req.tipoProfissional();
-      if (nucleo == null || nucleo.isBlank()) {
-        throw new ApiException(
-            HttpStatus.BAD_REQUEST,
-            "nucleo_obrigatorio",
-            "Defina o núcleo da equipe antes de aprovar.");
-      }
-      if (turmaId == null || turmaId.isBlank()) {
-        throw new ApiException(
-            HttpStatus.BAD_REQUEST, "turma_obrigatoria", "Defina a turma da equipe antes de aprovar.");
-      }
-      if (tipoProfissional == null || !TIPOS_PROFISSIONAIS.contains(tipoProfissional)) {
-        throw new ApiException(
-            HttpStatus.BAD_REQUEST,
-            "tipo_profissional_invalido",
-            "Selecione um tipo profissional válido.");
-      }
-      criarContaEquipe(s, nucleo, turmaId, tipoProfissional);
+      criarConta(s, Perfil.PROFESSOR, null);
     }
 
     s.setStatus("APROVADA");
@@ -194,63 +182,6 @@ public class SolicitacaoController {
     } catch (Exception e) {
       throw new ApiException(
           HttpStatus.INTERNAL_SERVER_ERROR, "internal_error", "Erro ao criar a conta.");
-    }
-  }
-
-  private void criarContaEquipe(
-      Solicitacao solicitacao, String codigoNucleo, String turmaId, String tipoProfissional) {
-    var nucleo =
-        nucleos
-            .findByCodigo(codigoNucleo)
-            .filter(n -> n.isAtivo())
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.BAD_REQUEST,
-                        "nucleo_invalido",
-                        "O núcleo selecionado não existe mais ou está inativo."));
-    Turma turma =
-        turmas
-            .findById(turmaId)
-            .filter(t -> t.isAtivo() && nucleo.getId().equals(t.getNucleoId()))
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.BAD_REQUEST,
-                        "turma_invalida",
-                        "A turma selecionada não pertence ao núcleo informado."));
-
-    criarConta(solicitacao, Perfil.PROFESSOR, codigoNucleo);
-    Usuario usuario =
-        usuarios
-            .findByEmailIgnoreCase(extrairEmail(solicitacao))
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "internal_error",
-                        "Erro ao localizar a conta criada."));
-    usuario.setProjetoId(nucleo.getProjetoId());
-    usuario.setNucleoId(nucleo.getId());
-    usuario.setTurmaId(turma.getId());
-    usuario.setTipoProfissional(tipoProfissional);
-    usuarios.save(usuario);
-
-    // O vínculo com a turma é o que dá as permissões e faz a turma aparecer no perfil da pessoa.
-    // Os campos acima ficam como "vínculo principal", usados pelas telas que ainda leem um só.
-    TurmaEquipe vinculo = new TurmaEquipe();
-    vinculo.setTurmaId(turma.getId());
-    vinculo.setUserId(usuario.getId());
-    vinculo.setTipoProfissional(tipoProfissional);
-    vinculo.setAtivo(true);
-    equipe.save(vinculo);
-  }
-
-  private String extrairEmail(Solicitacao solicitacao) {
-    try {
-      return objectMapper.readTree(solicitacao.getDados()).get("email").asText();
-    } catch (Exception e) {
-      throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "E-mail da solicitação inválido.");
     }
   }
 

@@ -8,9 +8,12 @@ import {
   type Solicitacao,
 } from '@/services/solicitacoes'
 import { getInscricoesPaginated, updateStatus } from '@/services/ficha-inscricao'
-import { getNucleos, type Nucleo } from '@/services/nucleos'
-import { getProjetos, type Projeto } from '@/services/projetos'
-import { getTurmas, type Turma } from '@/services/turmas'
+import {
+  getNucleos,
+  getNucleosResumo,
+  type Nucleo,
+  type NucleoResumo,
+} from '@/services/nucleos'
 import { FichaInscricaoFF } from '@/lib/types'
 import { turmaLabels } from '@/lib/constants'
 import { campoLabels, documentoLabels, projetoLabel } from '@/lib/equipe-form'
@@ -44,12 +47,31 @@ import {
   GraduationCap,
   Inbox,
   Loader2,
+  Search,
   UserPlus,
   XCircle,
 } from 'lucide-react'
+import { InscricaoDetailDialog } from '@/components/admin/InscricaoDetailDialog'
 
 const TIPO_PROFESSOR = 'CADASTRO_PROFESSOR'
 const TIPO_ALUNA = 'CRIACAO_ALUNA'
+const NUCLEO_GERAL = '__GERAL__'
+
+const normalizarBairro = (valor?: string | null) =>
+  (valor ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+
+const zonaDoBairro = (inscricao: FichaInscricaoFF, nucleo?: Nucleo) => {
+  const bairro = normalizarBairro(inscricao.bairro)
+  if (!bairro) return undefined
+  return (nucleo?.zonas_prioritarias ?? []).find((zona) =>
+    zona.bairros.some((prioritario) => normalizarBairro(prioritario) === bairro),
+  )
+}
 
 const statusBadge: Record<string, { label: string; color: string }> = {
   PENDENTE: { label: 'Pendente', color: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },
@@ -61,14 +83,6 @@ const tipoLabel: Record<string, string> = {
   CRIACAO_ALUNA: 'Criação de conta de aluna',
   CADASTRO_PROFESSOR: 'Cadastro de equipe',
 }
-
-const tiposProfissionais = [
-  { value: 'PROFESSORA_DEFESA_PESSOAL', label: 'Professora de Defesa Pessoal' },
-  { value: 'AUXILIAR_DEFESA_PESSOAL', label: 'Auxiliar de Defesa Pessoal' },
-  { value: 'ASSISTENTE_SOCIAL', label: 'Assistente Social' },
-  { value: 'MEDIADORA_RODA_CONVERSA', label: 'Mediadora de Roda de Conversa' },
-  { value: 'MONITOR_CRIANCA', label: 'Monitor de Criança' },
-] as const
 
 // Ordem e agrupamento dos campos no detalhe do professor.
 const camposDetalhe: string[] = [
@@ -110,40 +124,41 @@ export default function Solicitacoes() {
   const { user } = useApp()
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [inscricoesPendentes, setInscricoesPendentes] = useState<FichaInscricaoFF[]>([])
-  const [projetos, setProjetos] = useState<Projeto[]>([])
   const [nucleos, setNucleos] = useState<Nucleo[]>([])
+  const [resumosNucleos, setResumosNucleos] = useState<NucleoResumo[]>([])
+  const [nucleoSelecionado, setNucleoSelecionado] = useState('')
   const [loading, setLoading] = useState(true)
   const [dialogNova, setDialogNova] = useState(false)
-  const [form, setForm] = useState({ name: '', email: '', password: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', nucleo: '' })
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
   const [analisando, setAnalisando] = useState<string | null>(null)
+  // Inscrição aberta para análise: a leitura do perfil vem antes da decisão de aprovar.
+  const [inscricaoDetalhe, setInscricaoDetalhe] = useState<FichaInscricaoFF | null>(null)
 
-  // Detalhe/aprovação do cadastro de professor
+  // Detalhe/aprovação do cadastro de profissional. Aprovar aqui é só validar o cadastro: o
+  // vínculo com o projeto é feito no cadastro do projeto e o vínculo com a turma, na tela do
+  // núcleo — é o que permite a mesma pessoa atuar em vários projetos ao mesmo tempo.
   const [profSelecionado, setProfSelecionado] = useState<Solicitacao | null>(null)
-  const [projetoProfessor, setProjetoProfessor] = useState('')
-  const [nucleoProfessor, setNucleoProfessor] = useState('')
-  const [turmasProfessor, setTurmasProfessor] = useState<Turma[]>([])
-  const [turmaProfessor, setTurmaProfessor] = useState('')
-  const [tipoProfissional, setTipoProfissional] = useState('')
 
   // Filtros
   const [filtroTipo, setFiltroTipo] = useState('ALL')
   const [filtroStatus, setFiltroStatus] = useState('ALL')
+  const [filtroBairro, setFiltroBairro] = useState('ALL')
 
   const isGestao = user?.perfil === 'GESTAO_GERAL'
   const isAdministrativo = user?.perfil === 'ADMINISTRATIVO'
   const isAssistente = user?.perfil === 'ASSISTENTE_SOCIAL'
-  // Inscrições/matrículas são aprovadas pela Gestão e pelo Administrativo
-  const podeAprovarInscricao = user?.perfil === 'GESTAO_GERAL' || user?.perfil === 'ADMINISTRATIVO'
+  // A análise e a decisão da inscrição pertencem exclusivamente ao Administrativo.
+  const podeAprovarInscricao = user?.perfil === 'ADMINISTRATIVO'
 
   const load = useCallback(async () => {
-    const [solicitacoesResult, inscricoesResult, projetosResult, nucleosResult] =
+    const [solicitacoesResult, inscricoesResult, nucleosResult, resumosResult] =
       await Promise.allSettled([
         getSolicitacoes(),
         getInscricoesPaginated({ status: 'AGUARDANDO', perPage: 200 }),
-        getProjetos(),
         getNucleos(),
+        getNucleosResumo(),
       ])
 
     if (solicitacoesResult.status === 'fulfilled') {
@@ -158,9 +173,6 @@ export default function Solicitacoes() {
       console.error('Failed to load inscricoes:', inscricoesResult.reason)
     }
 
-    if (projetosResult.status === 'fulfilled') {
-      setProjetos(projetosResult.value.filter((p) => p.ativo))
-    }
     if (nucleosResult.status === 'fulfilled') {
       const atuais = nucleosResult.value.filter((n) => n.ativo)
       setNucleos(atuais)
@@ -168,6 +180,12 @@ export default function Solicitacoes() {
       atuais.forEach((n) => {
         turmaLabels[n.codigo] = n.nome
       })
+    }
+
+    if (resumosResult.status === 'fulfilled') {
+      setResumosNucleos(resumosResult.value)
+    } else {
+      console.error('Failed to load nucleo summaries:', resumosResult.reason)
     }
 
     setLoading(false)
@@ -184,24 +202,82 @@ export default function Solicitacoes() {
     load()
   })
 
+  useEffect(() => {
+    setFiltroBairro('ALL')
+  }, [nucleoSelecionado])
+
   // Aplicação dos filtros (client-side sobre o que já veio do backend por perfil).
   const mostrarInscricoes =
     (filtroTipo === 'ALL' || filtroTipo === 'INSCRICAO') &&
     (filtroStatus === 'ALL' || filtroStatus === 'PENDENTE')
 
+  const solicitacoesDoNucleo = useMemo(
+    () =>
+      solicitacoes.filter((s) =>
+        nucleoSelecionado === NUCLEO_GERAL
+          ? !s.nucleo
+          : !!nucleoSelecionado && s.nucleo === nucleoSelecionado,
+      ),
+    [solicitacoes, nucleoSelecionado],
+  )
+
   const solicitacoesFiltradas = useMemo(
     () =>
-      solicitacoes.filter((s) => {
+      solicitacoesDoNucleo.filter((s) => {
         if (filtroTipo !== 'ALL' && filtroTipo !== 'INSCRICAO' && s.tipo !== filtroTipo)
           return false
         if (filtroTipo === 'INSCRICAO') return false
         if (filtroStatus !== 'ALL' && s.status !== filtroStatus) return false
         return true
       }),
-    [solicitacoes, filtroTipo, filtroStatus],
+    [solicitacoesDoNucleo, filtroTipo, filtroStatus],
   )
 
-  const inscricoesFiltradas = mostrarInscricoes ? inscricoesPendentes : []
+  const nucleoAtual = nucleos.find((n) => n.codigo === nucleoSelecionado)
+
+  const bairrosParaFiltro = useMemo(
+    () =>
+      [...new Set(
+        inscricoesPendentes
+          .filter((inscricao) => inscricao.turma === nucleoSelecionado && inscricao.bairro?.trim())
+          .map((inscricao) => (inscricao.bairro ?? '').trim()),
+      )].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [inscricoesPendentes, nucleoSelecionado],
+  )
+
+  const inscricoesFiltradas = useMemo(() => {
+    if (!mostrarInscricoes || !nucleoSelecionado || nucleoSelecionado === NUCLEO_GERAL) return []
+    return inscricoesPendentes
+      .filter(
+        (inscricao) =>
+          inscricao.turma === nucleoSelecionado &&
+          (filtroBairro === 'ALL' ||
+            normalizarBairro(inscricao.bairro) === normalizarBairro(filtroBairro)),
+      )
+      .sort((a, b) => {
+        const pontosA = a.pontuacao_prioridade ?? 0
+        const pontosB = b.pontuacao_prioridade ?? 0
+        if (pontosA !== pontosB) return pontosB - pontosA
+        // A avaliação do relato é humana; a data apenas mantém uma ordem estável enquanto o
+        // Administrativo decide o desempate.
+        return String(b.created ?? '').localeCompare(String(a.created ?? ''))
+      })
+  }, [
+    filtroBairro,
+    inscricoesPendentes,
+    mostrarInscricoes,
+    nucleoAtual,
+    nucleoSelecionado,
+  ])
+
+  const totalPorNucleo = (codigo: string) =>
+    solicitacoes.filter((s) => s.nucleo === codigo).length +
+    inscricoesPendentes.filter((i) => i.turma === codigo).length
+
+  const totalGeral = solicitacoes.filter((s) => !s.nucleo).length
+
+  const resumoAtual = resumosNucleos.find((r) => r.nucleo_id === nucleoAtual?.id)
+  const nucleoLotado = resumoAtual?.lotado === true
 
   const handleInscricao = async (id: string, aprovar: boolean) => {
     setAnalisando(id)
@@ -223,6 +299,10 @@ export default function Solicitacoes() {
   const handleSolicitar = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
+    if (!form.nucleo) {
+      setErro('Selecione o núcleo da solicitação.')
+      return
+    }
     setEnviando(true)
     try {
       await solicitarCriacaoAluna(form)
@@ -230,7 +310,7 @@ export default function Solicitacoes() {
         title: 'Solicitação enviada!',
         description: 'A Gestão Geral vai analisar a criação da conta.',
       })
-      setForm({ name: '', email: '', password: '' })
+      setForm({ name: '', email: '', password: '', nucleo: '' })
       setDialogNova(false)
       load()
     } catch (err) {
@@ -240,27 +320,18 @@ export default function Solicitacoes() {
     }
   }
 
-  // Aprovação/recusa das solicitações de conta (aluna direto; professor exige núcleo).
-  const handleAnalise = async (
-    id: string,
-    aprovar: boolean,
-    atribuicao?: { nucleo: string; turma_id: string; tipo_profissional: string },
-  ) => {
+  /** Aprovação/recusa das solicitações de conta. Aprovar cria a conta e nada além disso. */
+  const handleAnalise = async (id: string, aprovar: boolean) => {
     setAnalisando(id)
     try {
       if (aprovar) {
-        await aprovarSolicitacao(id, atribuicao)
+        await aprovarSolicitacao(id)
         toast({ title: 'Solicitação aprovada!', description: 'A conta foi criada.' })
       } else {
         await recusarSolicitacao(id)
         toast({ title: 'Solicitação recusada.' })
       }
       setProfSelecionado(null)
-      setProjetoProfessor('')
-      setNucleoProfessor('')
-      setTurmasProfessor([])
-      setTurmaProfessor('')
-      setTipoProfissional('')
       load()
     } catch (err) {
       toast({ title: getErrorMessage(err), variant: 'destructive' })
@@ -269,31 +340,7 @@ export default function Solicitacoes() {
     }
   }
 
-  const abrirProfessor = (s: Solicitacao) => {
-    setProfSelecionado(s)
-    setProjetoProfessor('')
-    setNucleoProfessor('')
-    setTurmasProfessor([])
-    setTurmaProfessor('')
-    setTipoProfissional('')
-  }
-
-  const selecionarNucleoProfessor = async (codigo: string) => {
-    setNucleoProfessor(codigo)
-    setTurmaProfessor('')
-    const nucleo = nucleos.find((n) => n.codigo === codigo)
-    if (!nucleo) {
-      setTurmasProfessor([])
-      return
-    }
-    try {
-      const lista = await getTurmas(nucleo.id)
-      setTurmasProfessor(lista.filter((t) => t.ativo))
-    } catch (err) {
-      setTurmasProfessor([])
-      toast({ title: getErrorMessage(err), variant: 'destructive' })
-    }
-  }
+  const abrirProfessor = (s: Solicitacao) => setProfSelecionado(s)
 
   if (loading) {
     return (
@@ -303,7 +350,8 @@ export default function Solicitacoes() {
     )
   }
 
-  const semResultados = solicitacoesFiltradas.length === 0 && inscricoesFiltradas.length === 0
+  const semResultados =
+    !!nucleoSelecionado && solicitacoesFiltradas.length === 0 && inscricoesFiltradas.length === 0
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -317,18 +365,27 @@ export default function Solicitacoes() {
           </p>
         </div>
         {isAssistente && (
-          <Button className="gap-2 shrink-0" onClick={() => setDialogNova(true)}>
+          <Button
+            className="gap-2 shrink-0"
+            onClick={() => {
+              setForm((atual) => ({
+                ...atual,
+                nucleo: nucleoSelecionado === NUCLEO_GERAL ? '' : nucleoSelecionado,
+              }))
+              setDialogNova(true)
+            }}
+          >
             <UserPlus className="w-4 h-4" /> Solicitar criação de aluna
           </Button>
         )}
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Tipo</Label>
           <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-            <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -342,7 +399,7 @@ export default function Solicitacoes() {
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Status</Label>
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -353,7 +410,89 @@ export default function Solicitacoes() {
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="filtro-nucleo" className="text-xs text-muted-foreground">
+            Núcleo
+          </Label>
+          <Select value={nucleoSelecionado} onValueChange={setNucleoSelecionado}>
+            <SelectTrigger id="filtro-nucleo" className="w-full">
+              <SelectValue placeholder="Selecione o núcleo" />
+            </SelectTrigger>
+            <SelectContent>
+              {nucleos.map((nucleo) => (
+                <SelectItem key={nucleo.id} value={nucleo.codigo}>
+                  {nucleo.nome} ({totalPorNucleo(nucleo.codigo)})
+                </SelectItem>
+              ))}
+              <SelectItem value={NUCLEO_GERAL}>Sem núcleo definido ({totalGeral})</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="filtro-bairro" className="text-xs text-muted-foreground">
+            Bairro
+          </Label>
+          <Select
+            value={filtroBairro}
+            onValueChange={setFiltroBairro}
+            disabled={!nucleoAtual || bairrosParaFiltro.length === 0}
+          >
+            <SelectTrigger id="filtro-bairro" className="w-full">
+              <SelectValue placeholder="Todos os bairros" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos os bairros</SelectItem>
+              {bairrosParaFiltro.map((bairro) => (
+                <SelectItem key={bairro} value={bairro}>
+                  {bairro}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      {nucleoAtual && resumoAtual && (
+        <Card className={nucleoLotado ? 'border-rose-300 bg-rose-50/50' : 'border-primary/20'}>
+          <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="font-semibold">{nucleoAtual.nome}</p>
+                {nucleoLotado && <Badge variant="destructive">Limite preenchido</Badge>}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                A ocupação considera somente as alunas aprovadas neste núcleo.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-5 text-sm">
+              <div>
+                <p className="text-muted-foreground">Capacidade</p>
+                <p className="text-lg font-semibold">{resumoAtual.capacidade ?? 'Não definida'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Ocupadas</p>
+                <p className="text-lg font-semibold">{resumoAtual.alunas}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Vagas disponíveis</p>
+                <p
+                  className={`text-lg font-semibold ${nucleoLotado ? 'text-rose-600' : 'text-emerald-600'}`}
+                >
+                  {resumoAtual.vagas_disponiveis ?? 'Sem limite'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!nucleoSelecionado && (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Selecione um núcleo para visualizar as solicitações e as vagas disponíveis.
+          </CardContent>
+        </Card>
+      )}
 
       {semResultados ? (
         <Card>
@@ -371,7 +510,7 @@ export default function Solicitacoes() {
               </h2>
               {inscricoesFiltradas.map((i) => (
                 <Card key={i.id}>
-                  <CardContent className="pt-6">
+                  <CardContent>
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -379,29 +518,76 @@ export default function Solicitacoes() {
                           <Badge className={statusBadge.PENDENTE.color} variant="secondary">
                             Aguardando
                           </Badge>
+                          <Badge variant="outline" className="font-semibold">
+                            {i.pontuacao_prioridade ?? 0} pontos ·{' '}
+                            {i.criterios_prioridade?.length ?? 0}/10 com valor integral
+                          </Badge>
+                          {zonaDoBairro(i, nucleoAtual) && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-violet-100 text-violet-800 hover:bg-violet-100"
+                            >
+                              Zona: {zonaDoBairro(i, nucleoAtual)?.nome}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {turmaLabels[i.turma ?? ''] ?? i.turma ?? 'Sem turma'}
                           {i.email ? ` · ${i.email}` : ''}
                         </p>
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Horário escolhido:</strong> {i.horario_preferido || 'Não informado'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Bairro:</strong> {i.bairro || 'Não informado'} ·{' '}
+                          {zonaDoBairro(i, nucleoAtual)
+                            ? `zona ${zonaDoBairro(i, nucleoAtual)?.nome}`
+                            : 'fora das zonas prioritárias'}
+                        </p>
+                        <div className="max-w-2xl rounded-md bg-muted/40 p-3 text-sm">
+                          <p className="mb-1 text-xs font-medium text-muted-foreground">
+                            Relato para desempate
+                          </p>
+                          <p className="line-clamp-3 whitespace-pre-wrap">
+                            {i.motivo_participar || 'Sem relato informado'}
+                          </p>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                           Inscrita em{' '}
                           {i.created ? new Date(i.created).toLocaleDateString('pt-BR') : '—'}
                         </p>
                       </div>
-                      {podeAprovarInscricao && (
-                        <div className="flex gap-2 shrink-0">
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          className="gap-1.5"
+                          onClick={() => setInscricaoDetalhe(i)}
+                        >
+                          <Search className="w-4 h-4" /> Analisar
+                        </Button>
+                        {podeAprovarInscricao && (
+                          <>
                           <Button
                             className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
                             disabled={analisando === i.id}
-                            onClick={() => handleInscricao(i.id, true)}
+                            onClick={() => {
+                              if (nucleoLotado) {
+                                toast({
+                                  title: 'Limite de vagas preenchido',
+                                  description: `O núcleo ${nucleoAtual?.nome ?? ''} não possui vagas disponíveis.`,
+                                  variant: 'destructive',
+                                })
+                                return
+                              }
+                              handleInscricao(i.id, true)
+                            }}
                           >
                             {analisando === i.id ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
                             ) : (
                               <CheckCircle2 className="w-4 h-4" />
                             )}
-                            Aprovar
+                            {nucleoLotado ? 'Limite preenchido' : 'Aprovar'}
                           </Button>
                           <Button
                             variant="outline"
@@ -411,8 +597,9 @@ export default function Solicitacoes() {
                           >
                             <XCircle className="w-4 h-4" /> Lista de espera
                           </Button>
-                        </div>
-                      )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -432,7 +619,7 @@ export default function Solicitacoes() {
                 const ehProfessor = s.tipo === TIPO_PROFESSOR
                 return (
                   <Card key={s.id}>
-                    <CardContent className="pt-6">
+                    <CardContent>
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -523,6 +710,25 @@ export default function Solicitacoes() {
               A conta só será criada depois que a Gestão Geral aprovar a solicitação.
             </p>
             <div className="space-y-2">
+              <Label>Núcleo</Label>
+              <Select
+                value={form.nucleo}
+                onValueChange={(nucleo) => setForm((f) => ({ ...f, nucleo }))}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o núcleo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {nucleos.map((nucleo) => (
+                    <SelectItem key={nucleo.id} value={nucleo.codigo}>
+                      {nucleo.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label>Nome completo</Label>
               <Input
                 value={form.name}
@@ -568,41 +774,23 @@ export default function Solicitacoes() {
         solicitacao={profSelecionado}
         onClose={() => setProfSelecionado(null)}
         podeAnalisar={(isGestao || isAdministrativo) && profSelecionado?.status === 'PENDENTE'}
-        projetos={projetos}
-        nucleos={nucleos}
-        turmas={turmasProfessor}
-        projeto={projetoProfessor}
-        onProjetoChange={(id) => {
-          setProjetoProfessor(id)
-          setNucleoProfessor('')
-          setTurmasProfessor([])
-          setTurmaProfessor('')
-        }}
-        nucleo={nucleoProfessor}
-        onNucleoChange={selecionarNucleoProfessor}
-        turma={turmaProfessor}
-        onTurmaChange={setTurmaProfessor}
-        tipoProfissional={tipoProfissional}
-        onTipoProfissionalChange={setTipoProfissional}
         analisando={!!profSelecionado && analisando === profSelecionado.id}
         onAprovar={() => {
-          if (!profSelecionado) return
-          if (!projetoProfessor || !nucleoProfessor || !turmaProfessor || !tipoProfissional) {
-            toast({
-              title: 'Preencha projeto, núcleo, turma e tipo profissional',
-              variant: 'destructive',
-            })
-            return
-          }
-          handleAnalise(profSelecionado.id, true, {
-            nucleo: nucleoProfessor,
-            turma_id: turmaProfessor,
-            tipo_profissional: tipoProfissional,
-          })
+          if (profSelecionado) handleAnalise(profSelecionado.id, true)
         }}
         onRecusar={() => {
           if (profSelecionado) handleAnalise(profSelecionado.id, false)
         }}
+      />
+
+      {/* Dialog: análise do perfil da candidata antes de aprovar a vaga */}
+      <InscricaoDetailDialog
+        inscricao={inscricaoDetalhe}
+        open={!!inscricaoDetalhe}
+        onOpenChange={(aberto) => {
+          if (!aberto) setInscricaoDetalhe(null)
+        }}
+        podeDecidirVagaCrianca={podeAprovarInscricao}
       />
     </div>
   )
@@ -612,17 +800,6 @@ function ProfessorDialog({
   solicitacao,
   onClose,
   podeAnalisar,
-  projetos,
-  nucleos,
-  turmas,
-  projeto,
-  onProjetoChange,
-  nucleo,
-  onNucleoChange,
-  turma,
-  onTurmaChange,
-  tipoProfissional,
-  onTipoProfissionalChange,
   analisando,
   onAprovar,
   onRecusar,
@@ -630,17 +807,6 @@ function ProfessorDialog({
   solicitacao: Solicitacao | null
   onClose: () => void
   podeAnalisar: boolean
-  projetos: Projeto[]
-  nucleos: Nucleo[]
-  turmas: Turma[]
-  projeto: string
-  onProjetoChange: (v: string) => void
-  nucleo: string
-  onNucleoChange: (v: string) => void
-  turma: string
-  onTurmaChange: (v: string) => void
-  tipoProfissional: string
-  onTipoProfissionalChange: (v: string) => void
   analisando: boolean
   onAprovar: () => void
   onRecusar: () => void
@@ -655,7 +821,8 @@ function ProfessorDialog({
         <DialogHeader>
           <DialogTitle>Cadastro de equipe</DialogTitle>
           <DialogDescription>
-            Confira os dados e defina onde e como este membro da equipe atuará.
+            Confira os dados do cadastro e aprove ou reprove. Os vínculos com projeto e turma são
+            definidos depois, no cadastro do projeto e na tela do núcleo.
           </DialogDescription>
         </DialogHeader>
 
@@ -702,73 +869,10 @@ function ProfessorDialog({
           </div>
 
           {podeAnalisar && (
-            <div className="grid grid-cols-1 gap-4 rounded-md border bg-muted/30 p-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Projeto *</Label>
-                <Select value={projeto} onValueChange={onProjetoChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o projeto..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projetos.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.nome}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Núcleo *</Label>
-                <Select value={nucleo} onValueChange={onNucleoChange} disabled={!projeto}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o núcleo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {nucleos
-                      .filter((item) => item.projeto_id === projeto)
-                      .map((item) => (
-                        <SelectItem key={item.id} value={item.codigo}>
-                          {item.nome}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Turma *</Label>
-                <Select value={turma} onValueChange={onTurmaChange} disabled={!nucleo}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a turma..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {turmas.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.nome} · {item.turno}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Tipo profissional *</Label>
-                <Select value={tipoProfissional} onValueChange={onTipoProfissionalChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a função..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tiposProfissionais.map((item) => (
-                      <SelectItem key={item.value} value={item.value}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-muted-foreground sm:col-span-2">
-                Todos os tipos podem realizar chamadas, exceto Monitor de Criança.
-              </p>
-            </div>
+            <p className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Aprovar cria a conta da pessoa. Para colocá-la em um projeto, use o cadastro do
+              projeto; para definir a turma e a função dela, use a tela do núcleo.
+            </p>
           )}
         </div>
 
@@ -793,7 +897,7 @@ function ProfessorDialog({
                 ) : (
                   <CheckCircle2 className="w-4 h-4" />
                 )}
-                Aprovar e criar conta
+                Aprovar cadastro
               </Button>
             </>
           ) : (

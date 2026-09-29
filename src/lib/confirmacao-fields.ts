@@ -1,13 +1,18 @@
 export type FieldType =
   | 'text'
+  | 'number'
   | 'date'
   | 'select'
   | 'textarea'
   | 'radio'
   | 'checkbox'
   | 'multi-select-add'
+  /** Lista de itens com quantidade — usado nos bens da família. */
+  | 'multi-select-qtd'
   | 'children'
   | 'profession'
+  /** Valor derivado de outros campos; a usuária vê, mas não digita. */
+  | 'computed'
 
 export interface FormField {
   name: string
@@ -18,8 +23,60 @@ export interface FormField {
   placeholder?: string
   prefillKey?: string
   readonly?: boolean
+  /** Limites do campo numérico. */
+  min?: number
+  step?: string
+  /** Texto de apoio exibido abaixo do campo. */
+  hint?: string
   showWhen?: { field: string; equals: string }
   hideWhen?: { field: string; equals: string }
+}
+
+/**
+ * Salário mínimo usado para classificar a renda per capita na ficha. Está aqui, e não espalhado
+ * pelos rótulos, para a virada de ano ser uma alteração só.
+ */
+/**
+ * Faixas de renda per capita da pergunta 31 da ficha oficial. São exatamente as três do
+ * formulário — não derivam do salário mínimo. O limite de cada faixa é o teto dela.
+ */
+export const FAIXAS_RENDA: { ate: number | null; label: string }[] = [
+  { ate: 210, label: 'menor ou igual a R$ 210' },
+  { ate: 670, label: 'entre R$ 211 e R$ 670' },
+  { ate: null, label: 'maior que R$ 670' },
+]
+
+export function formatarReal(valor: number): string {
+  return valor.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/**
+ * Renda per capita = renda familiar total ÷ pessoas na residência, arredondada em centavos. O
+ * sistema calcula e mostra o resultado; a usuária não digita esse número.
+ *
+ * <p>Devolve nulo enquanto os dois campos não estiverem preenchidos de forma válida — número de
+ * pessoas maior que zero e renda não negativa.
+ */
+export function calcularRendaPerCapita(
+  rendaTotal: unknown,
+  pessoas: unknown,
+): number | null {
+  const renda = Number(String(rendaTotal ?? '').replace(',', '.'))
+  const quantidade = Number(pessoas)
+  if (!Number.isFinite(renda) || renda < 0) return null
+  if (!Number.isFinite(quantidade) || quantidade < 1) return null
+  return Math.round((renda / quantidade) * 100) / 100
+}
+
+/** Faixa em que a renda per capita calculada se enquadra. */
+export function faixaDaRenda(perCapita: number | null): string {
+  if (perCapita == null) return ''
+  return FAIXAS_RENDA.find((f) => f.ate == null || perCapita <= f.ate)!.label
 }
 
 export interface FormSection {
@@ -132,22 +189,35 @@ export const formSections: FormSection[] = [
         hideWhen: { field: 'situacao_trabalho', equals: 'Desempregada' },
       },
       {
-        name: 'renda_familiar',
-        label: 'Renda familiar per capita — salário mínimo de 2026: R$ 1.621,00',
-        type: 'select',
-        options: [
-          'Até R$ 810,50',
-          'De R$ 810,51 a R$ 1.621,00',
-          'De R$ 1.621,01 a R$ 3.242,00',
-          'De R$ 3.242,01 a R$ 4.863,00',
-          'Acima de R$ 4.863,00',
-        ],
+        name: 'renda_familiar_total',
+        label: 'Renda familiar total por mês',
+        type: 'number',
+        required: true,
+        min: 0,
+        step: '0.01',
+        placeholder: 'Ex: 2400,00',
+        hint: 'Some tudo o que entra na casa por mês, de todas as pessoas.',
       },
       {
         name: 'pessoas_residencia',
         label: 'Pessoas na residência',
-        type: 'text',
+        type: 'number',
+        required: true,
+        min: 1,
+        step: '1',
         placeholder: 'Ex: 4',
+        hint: 'Conte você e todas as pessoas que moram com você.',
+      },
+      {
+        name: 'renda_per_capita',
+        label: 'Renda per capita',
+        type: 'computed',
+        hint: 'Calculada pelo sistema: renda familiar total dividida pelo número de pessoas.',
+      },
+      {
+        name: 'renda_familiar',
+        label: 'Faixa de renda per capita',
+        type: 'computed',
       },
       {
         name: 'escolaridade',
@@ -268,7 +338,7 @@ export const formSections: FormSection[] = [
       {
         name: 'bens_familia',
         label: 'Bens da família',
-        type: 'multi-select-add',
+        type: 'multi-select-qtd',
         options: [
           'Geladeira',
           'Fogão',
@@ -284,6 +354,7 @@ export const formSections: FormSection[] = [
           'Bicicleta',
         ],
         placeholder: 'Digite outro bem',
+        hint: 'Marque o que a família tem e informe quantos de cada.',
       },
       {
         name: 'programas_sociais',
@@ -346,7 +417,14 @@ export const formSections: FormSection[] = [
         name: 'denuncio',
         label: 'Realizou boletim de ocorrência?',
         type: 'radio',
-        options: ['Sim', 'Não', 'Não se aplica'],
+        options: ['Sim', 'Não', 'Outro', 'Não se aplica'],
+      },
+      {
+        name: 'denuncio_outro',
+        label: 'Qual providência foi tomada?',
+        type: 'text',
+        placeholder: 'Ex.: medida protetiva, CRAS, Ministério Público',
+        showWhen: { field: 'denuncio', equals: 'Outro' },
       },
       {
         name: 'apoio_familiar',

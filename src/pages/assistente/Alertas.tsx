@@ -65,7 +65,7 @@ export default function Alertas() {
   const AlertaCard = ({ alerta }: { alerta: Alerta }) => {
     const nivel = nivelAlerta(alerta.faltas_sem_justificativa)
     return <Card className={alerta.status === 'ABERTO' ? nivel.borda : 'opacity-70'}>
-      <CardContent className="pt-6">
+      <CardContent>
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Campo, GradeDados } from '@/components/Dados'
 import { Atendimento } from '@/lib/types'
 import {
   getRelatorioAtendimentos,
@@ -464,15 +465,6 @@ function AtendimentosTab() {
 /* Sub-aba 2: Relatório de Aluna */
 /* ---------------------------- */
 
-function CampoInfo({ rotulo, valor }: { rotulo: string; valor?: string | null }) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{rotulo}</p>
-      <p className="text-sm font-medium">{valor || '—'}</p>
-    </div>
-  )
-}
-
 /** Seções da ficha de confirmação são JSON — exibe os pares chave/valor de forma legível. */
 const rotulosConfirmacao: Record<string, string> = {
   tem_filhos: 'Tem filhos',
@@ -557,17 +549,19 @@ function FichaAluna({ ficha, onVoltar }: { ficha: FichaConsolidada; onVoltar: ()
             </Badge>
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          <CampoInfo rotulo="RG" valor={insc.rg} />
-          <CampoInfo rotulo="Nascimento" valor={formatarData(insc.data_nascimento)} />
-          <CampoInfo rotulo="Telefone" valor={insc.telefone} />
-          <CampoInfo rotulo="E-mail" valor={insc.email} />
-          <CampoInfo rotulo="Endereço" valor={insc.endereco} />
-          <CampoInfo rotulo="Bairro" valor={insc.bairro} />
-          <CampoInfo rotulo="Cidade" valor={insc.cidade} />
-          <CampoInfo rotulo="Estado" valor={insc.estado} />
-          <CampoInfo rotulo="CEP" valor={insc.cep} />
-          <CampoInfo rotulo="1ª aula" valor={formatarData(insc.data_primeira_aula)} />
+        <CardContent>
+          <GradeDados className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+          <Campo rotulo="RG" valor={insc.rg} />
+          <Campo rotulo="Nascimento" valor={formatarData(insc.data_nascimento)} />
+          <Campo rotulo="Telefone" valor={insc.telefone} />
+          <Campo rotulo="E-mail" valor={insc.email} />
+          <Campo rotulo="Endereço" valor={insc.endereco} />
+          <Campo rotulo="Bairro" valor={insc.bairro} />
+          <Campo rotulo="Cidade" valor={insc.cidade} />
+          <Campo rotulo="Estado" valor={insc.estado} />
+          <Campo rotulo="CEP" valor={insc.cep} />
+          <Campo rotulo="1ª aula" valor={formatarData(insc.data_primeira_aula)} />
+          </GradeDados>
         </CardContent>
       </Card>
 

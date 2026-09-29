@@ -153,10 +153,57 @@ async function request<T>(
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+  put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body),
   postForm: <T>(path: string, form: FormData) => request<T>('POST', path, form, true),
   patchForm: <T>(path: string, form: FormData) => request<T>('PATCH', path, form, true),
+}
+
+/**
+ * Baixa um arquivo gerado pelo backend (exportações). Diferente de `api.get`, a resposta é binária,
+ * então precisa passar por Blob — e o nome do arquivo vem no Content-Disposition, para o usuário
+ * receber `evidencias_projeto_turma_data.docx` em vez de um nome genérico.
+ */
+export async function downloadFile(path: string): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {}
+  if (authStore.isValid) headers['Authorization'] = `Bearer ${authStore.token}`
+
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(FORM_TIMEOUT_MS),
+    })
+  } catch {
+    throw new ApiError(
+      0,
+      'network_error',
+      'Não foi possível conectar ao servidor. Verifique sua conexão.',
+    )
+  }
+
+  if (!res.ok) {
+    let data: any = null
+    try {
+      data = JSON.parse(await res.text())
+    } catch {
+      data = null
+    }
+    if (res.status === 401 && authStore.isValid) authStore.clear()
+    throw new ApiError(
+      res.status,
+      data?.error ?? 'unknown_error',
+      data?.message ?? 'Não foi possível gerar o arquivo.',
+      data?.fields,
+    )
+  }
+
+  const disposition = res.headers.get('Content-Disposition') ?? ''
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)
+  const filename = match ? decodeURIComponent(match[1]) : 'download'
+  return { blob: await res.blob(), filename }
 }
 
 /**

@@ -1,21 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
+  desvincularZonaDoNucleo,
   getAlunasNucleo,
   getEquipeNucleo,
   getNucleo,
+  getZonasPrioritarias,
+  vincularZonaAoNucleo,
   type AlunaNucleo,
   type MembroNucleo,
   type Nucleo,
+  type ZonaPrioritaria,
 } from '@/services/nucleos'
 import { getProjetos, type Projeto } from '@/services/projetos'
+import { vincularProfissionaisAoNucleo } from '@/services/nucleos'
 import {
   alocarAluna,
+  alocarAlunasEmLote,
   criarTurma,
   desalocarAluna,
   desvincularProfissional,
+  editarTurma,
+  excluirTurma,
   getTurmas,
-  vincularProfissional,
   type Turma,
 } from '@/services/turmas'
 import api from '@/lib/api/client'
@@ -31,6 +38,7 @@ import {
   turnoLabel,
   turnos,
 } from '@/lib/turmas'
+import { MultiSelect } from '@/components/ui/multi-select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -61,13 +69,21 @@ import {
   GraduationCap,
   Loader2,
   MapPin,
+  Pencil,
   Plus,
   Trash2,
   UserPlus,
   Users,
 } from 'lucide-react'
 
-const turmaVazia = { nome: '', capacidade: '', dias_semana: '', turno: '' }
+const turmaVazia = {
+  nome: '',
+  capacidade: '',
+  dias_semana: '',
+  turno: '',
+  horario_inicio: '',
+  horario_fim: '',
+}
 const SEM_TURMA = '__sem_turma__'
 
 /** Deixa explícito, na hora de escolher o tipo, qual chamada aquela função abre. */
@@ -82,6 +98,8 @@ export default function NucleoDetalhe() {
   const { user } = useApp()
   // Abrir turma é exclusivo da Gestão Geral; o Administrativo gerencia equipe e alunas.
   const podeAbrirTurma = user?.perfil === 'GESTAO_GERAL'
+  const podeGerenciarZonas =
+    user?.perfil === 'GESTAO_GERAL' || user?.perfil === 'ADMINISTRATIVO'
   const [nucleo, setNucleo] = useState<Nucleo | null>(null)
   const [projeto, setProjeto] = useState<Projeto | null>(null)
   const [turmas, setTurmas] = useState<Turma[]>([])
@@ -90,23 +108,35 @@ export default function NucleoDetalhe() {
   const [profissionais, setProfissionais] = useState<Usuario[]>([])
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
+  // As zonas são cadastros globais; aqui o núcleo apenas vincula as que utiliza.
+  const [todasZonas, setTodasZonas] = useState<ZonaPrioritaria[]>([])
+  const [zonaParaVincular, setZonaParaVincular] = useState('')
 
+  // Formulário de turma: `turmaEditando` diferencia abrir uma turma de editar a existente.
   const [novaTurma, setNovaTurma] = useState<typeof turmaVazia | null>(null)
+  const [turmaEditando, setTurmaEditando] = useState<Turma | null>(null)
+  // Exclusão de turma: pede a senha da Gestão, como a exclusão de núcleo.
+  const [turmaExcluir, setTurmaExcluir] = useState<Turma | null>(null)
+  const [senhaExclusao, setSenhaExclusao] = useState('')
+  // Alocação de alunas a partir da turma, com seleção múltipla.
+  const [alocacao, setAlocacao] = useState<{ turma: Turma; alunas_ids: string[] } | null>(null)
+  // Vínculo da equipe: vários profissionais entram de uma vez na mesma turma e com o mesmo papel.
   const [novoVinculo, setNovoVinculo] = useState<{
     turma_id: string
-    user_id: string
+    profissionais_ids: string[]
     tipo_profissional: string
   } | null>(null)
 
   const load = useCallback(async () => {
     if (!id) return
-    const [n, ts, eq, al, ps, projs] = await Promise.all([
+    const [n, ts, eq, al, ps, projs, zonas] = await Promise.all([
       getNucleo(id),
       getTurmas(id),
       getEquipeNucleo(id),
       getAlunasNucleo(id),
       api.get<Usuario[]>('/api/users?perfil=PROFESSOR,ASSISTENTE_SOCIAL'),
       getProjetos(),
+      getZonasPrioritarias(),
     ])
     setNucleo(n)
     setTurmas(ts)
@@ -114,6 +144,7 @@ export default function NucleoDetalhe() {
     setAlunas(al)
     setProfissionais(ps)
     setProjeto(projs.find((p) => p.id === n.projeto_id) ?? null)
+    setTodasZonas(zonas)
   }, [id])
 
   useEffect(() => {
@@ -165,6 +196,7 @@ export default function NucleoDetalhe() {
     return mapa
   }, [alunas])
   const semTurma = alunas.filter((a) => !a.turma_id).length
+  const zonasPrioritarias = nucleo?.zonas_prioritarias ?? []
 
   const executar = async (acao: () => Promise<unknown>, sucesso: string) => {
     setSalvando(true)
@@ -189,32 +221,133 @@ export default function NucleoDetalhe() {
       return { ...f, dias_semana: novos.join(',') }
     })
 
-  const salvarTurma = async () => {
-    if (!novaTurma) return
+  const zonasDisponiveis = todasZonas.filter(
+    (zona) => !zonasPrioritarias.some((vinculada) => vinculada.id === zona.id),
+  )
+
+  const vincularZona = async () => {
+    if (!zonaParaVincular) return
     const ok = await executar(
-      () =>
-        criarTurma({
-          ...novaTurma,
-          nucleo_id: id,
-          capacidade: Number(novaTurma.capacidade) || undefined,
-        }),
-      '🎓 Turma aberta!',
+      () => vincularZonaAoNucleo(zonaParaVincular, id),
+      '🗺️ Zona vinculada ao núcleo!',
     )
-    if (ok) setNovaTurma(null)
+    if (ok) setZonaParaVincular('')
   }
 
-  const salvarVinculo = async () => {
-    if (!novoVinculo) return
+  /**
+   * Aloca as alunas selecionadas na turma. A resposta separa quem entrou de quem já estava e de
+   * quem foi recusada, então o aviso conta o que realmente aconteceu.
+   */
+  const salvarAlocacao = async () => {
+    if (!alocacao || !alocacao.alunas_ids.length) return
+    setSalvando(true)
+    try {
+      const resultado = await alocarAlunasEmLote(alocacao.turma.id, alocacao.alunas_ids)
+      const partes: string[] = []
+      if (resultado.ja_na_turma.length)
+        partes.push(`${resultado.ja_na_turma.length} já estava(m) na turma`)
+      resultado.recusadas.forEach((r) => partes.push(r.motivo))
+      toast({
+        title: `🙋‍♀️ ${resultado.alocadas.length} aluna(s) alocada(s) em ${alocacao.turma.nome}.`,
+        description: partes.length ? partes.join(' · ') : undefined,
+        variant: resultado.alocadas.length ? undefined : 'destructive',
+      })
+      await load()
+      setAlocacao(null)
+    } catch (e) {
+      toast({
+        title: 'Não foi possível alocar',
+        description: getErrorMessage(e),
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const confirmarExclusaoTurma = async () => {
+    if (!turmaExcluir || !senhaExclusao) return
+    const ok = await executar(
+      () => excluirTurma(turmaExcluir.id, senhaExclusao),
+      `Turma ${turmaExcluir.nome} excluída.`,
+    )
+    if (ok) {
+      setTurmaExcluir(null)
+      setSenhaExclusao('')
+    }
+  }
+
+  const abrirNovaTurma = () => {
+    setTurmaEditando(null)
+    setNovaTurma({ ...turmaVazia })
+  }
+
+  const abrirEdicaoTurma = (t: Turma) => {
+    setTurmaEditando(t)
+    setNovaTurma({
+      nome: t.nome,
+      dias_semana: t.dias_semana ?? '',
+      turno: t.turno ?? '',
+      horario_inicio: t.horario_inicio ?? '',
+      horario_fim: t.horario_fim ?? '',
+      capacidade: t.capacidade == null ? '' : String(t.capacidade),
+    })
+  }
+
+  const salvarTurma = async () => {
+    if (!novaTurma) return
+    const dados = {
+      ...novaTurma,
+      nucleo_id: id,
+      capacidade: Number(novaTurma.capacidade) || undefined,
+    }
     const ok = await executar(
       () =>
-        vincularProfissional(
-          novoVinculo.turma_id,
-          novoVinculo.user_id,
-          novoVinculo.tipo_profissional,
-        ),
-      '👥 Profissional vinculado à turma!',
+        turmaEditando
+          ? editarTurma(turmaEditando.id, { ...dados, ativo: turmaEditando.ativo })
+          : criarTurma(dados),
+      turmaEditando ? '🎓 Turma atualizada!' : '🎓 Turma aberta!',
     )
-    if (ok) setNovoVinculo(null)
+    if (ok) {
+      setNovaTurma(null)
+      setTurmaEditando(null)
+    }
+  }
+
+  /**
+   * Vincula em lote. A resposta separa quem entrou de quem já estava e de quem foi recusado por
+   * choque de horário, então o aviso conta exatamente o que aconteceu em vez de só "salvo".
+   */
+  const salvarVinculo = async () => {
+    if (!novoVinculo || !novoVinculo.profissionais_ids.length) return
+    setSalvando(true)
+    try {
+      const resultado = await vincularProfissionaisAoNucleo(
+        id,
+        novoVinculo.profissionais_ids,
+        novoVinculo.turma_id,
+        novoVinculo.tipo_profissional,
+      )
+      const partes: string[] = []
+      if (resultado.ja_vinculados.length)
+        partes.push(`${resultado.ja_vinculados.length} já estava(m) na turma`)
+      resultado.recusados.forEach((r) => partes.push(r.motivo))
+      toast({
+        title: `👥 ${resultado.adicionados.length} profissional(is) vinculado(s).`,
+        description: partes.length ? partes.join(' · ') : undefined,
+        variant: resultado.adicionados.length ? undefined : 'destructive',
+      })
+      await load()
+      setNovoVinculo(null)
+    } catch (e) {
+      toast({
+        title: 'Não foi possível vincular',
+        description: getErrorMessage(e),
+        variant: 'destructive',
+      })
+    } finally {
+      setSalvando(false)
+    }
   }
 
   if (carregando)
@@ -269,6 +402,7 @@ export default function NucleoDetalhe() {
           <TabsTrigger value="turmas">🎓 Turmas ({turmas.length})</TabsTrigger>
           <TabsTrigger value="equipe">👥 Equipe ({equipe.length})</TabsTrigger>
           <TabsTrigger value="alunas">🙋‍♀️ Alunas ({alunas.length})</TabsTrigger>
+          <TabsTrigger value="zonas">🗺️ Zonas ({zonasPrioritarias.length})</TabsTrigger>
         </TabsList>
 
         {/* ------------------------------------------------------------ turmas */}
@@ -278,7 +412,7 @@ export default function NucleoDetalhe() {
               A turma define o período e os dias da aula. As chamadas acontecem por turma.
             </p>
             {podeAbrirTurma && (
-              <Button onClick={() => setNovaTurma(turmaVazia)}>
+              <Button onClick={abrirNovaTurma}>
                 <Plus className="mr-2 h-4 w-4" />
                 Abrir turma
               </Button>
@@ -298,7 +432,7 @@ export default function NucleoDetalhe() {
             <div className="grid gap-4 md:grid-cols-2">
               {turmas.map((t) => (
                 <Card key={t.id} className={conflitos[t.id]?.length ? 'border-amber-300' : ''}>
-                  <CardHeader className="pb-3">
+                  <CardHeader>
                     <CardTitle className="flex items-center justify-between gap-2 text-base">
                       {t.nome}
                       <Badge variant="secondary">{turnoLabel(t.turno)}</Badge>
@@ -324,17 +458,47 @@ export default function NucleoDetalhe() {
                         {t.capacidade ? ` de ${t.capacidade}` : ''}
                       </span>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() =>
-                        setNovoVinculo({ turma_id: t.id, user_id: '', tipo_profissional: '' })
-                      }
-                    >
-                      <UserPlus className="mr-1.5 h-4 w-4" />
-                      Vincular profissional
-                    </Button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAlocacao({ turma: t, alunas_ids: [] })}
+                      >
+                        <Users className="mr-1.5 h-4 w-4" />
+                        Alocar alunas
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setNovoVinculo({
+                            turma_id: t.id,
+                            profissionais_ids: [],
+                            tipo_profissional: '',
+                          })
+                        }
+                      >
+                        <UserPlus className="mr-1.5 h-4 w-4" />
+                        Vincular profissionais
+                      </Button>
+                      {podeAbrirTurma && (
+                        <>
+                          <Button variant="outline" size="sm" onClick={() => abrirEdicaoTurma(t)}>
+                            <Pencil className="mr-1.5 h-4 w-4" />
+                            Editar turma
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setTurmaExcluir(t)}
+                          >
+                            <Trash2 className="mr-1.5 h-4 w-4" />
+                            Apagar turma
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -351,11 +515,15 @@ export default function NucleoDetalhe() {
             <Button
               disabled={!turmas.length}
               onClick={() =>
-                setNovoVinculo({ turma_id: turmas[0]?.id ?? '', user_id: '', tipo_profissional: '' })
+                setNovoVinculo({
+                  turma_id: turmas[0]?.id ?? '',
+                  profissionais_ids: [],
+                  tipo_profissional: '',
+                })
               }
             >
               <UserPlus className="mr-2 h-4 w-4" />
-              Vincular à turma
+              Vincular profissionais à turma
             </Button>
           </div>
           {!turmas.length && (
@@ -485,13 +653,129 @@ export default function NucleoDetalhe() {
             </div>
           )}
         </TabsContent>
+
+        {/* ------------------------------------------------ zonas prioritárias */}
+        <TabsContent value="zonas" className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Zonas prioritárias do núcleo</p>
+              <p className="text-sm text-muted-foreground">
+                Selecione entre as zonas globais já cadastradas. A mesma zona pode ser usada em
+                vários núcleos.
+              </p>
+            </div>
+          </div>
+
+          {podeGerenciarZonas && (
+            <Card>
+              <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-end">
+                <div className="flex-1 space-y-2">
+                  <Label>Vincular uma zona existente</Label>
+                  <Select value={zonaParaVincular} onValueChange={setZonaParaVincular}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a zona..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {zonasDisponiveis.map((zona) => (
+                        <SelectItem key={zona.id} value={zona.id}>
+                          {zona.nome} · {zona.cidade}/{zona.estado} · {zona.bairros.length} bairros
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button disabled={!zonaParaVincular || salvando} onClick={vincularZona}>
+                  <Plus className="mr-2 h-4 w-4" /> Vincular zona
+                </Button>
+                {!todasZonas.length && (
+                  <p className="text-sm text-muted-foreground">
+                    Cadastre primeiro uma zona na tela de Núcleos.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {zonasPrioritarias.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+                <MapPin className="h-8 w-8 text-muted-foreground" />
+                <p className="font-medium">Nenhuma zona prioritária cadastrada.</p>
+                <p className="text-sm text-muted-foreground">
+                  Vincule uma zona global para aplicar seus bairros neste núcleo.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {zonasPrioritarias.map((zona) => (
+                <Card key={zona.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between gap-3 text-base">
+                      <span className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-primary" /> {zona.nome}
+                      </span>
+                      <Badge variant="secondary">{zona.bairros.length} bairro(s)</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {zona.cidade}/{zona.estado}
+                      {zona.ponto_entrada || zona.ponto_saida
+                        ? ` · ${zona.ponto_entrada || 'início não informado'} → ${zona.ponto_saida || 'fim não informado'}`
+                        : ''}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {zona.bairros.map((bairro) => (
+                        <Badge key={bairro} variant="outline">
+                          {bairro}
+                        </Badge>
+                      ))}
+                    </div>
+                    {zona.atualizado_por_nome && (
+                      <p className="text-xs text-muted-foreground">
+                        Última alteração por {zona.atualizado_por_nome}.
+                      </p>
+                    )}
+                    {podeGerenciarZonas && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        disabled={salvando}
+                        onClick={() =>
+                          executar(
+                            () => desvincularZonaDoNucleo(zona.id, id),
+                            `Zona ${zona.nome} desvinculada do núcleo.`,
+                          )
+                        }
+                      >
+                        <Trash2 className="mr-1.5 h-4 w-4" /> Desvincular
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* ------------------------------------------------------- dialog turma */}
-      <Dialog open={!!novaTurma} onOpenChange={(o) => !o && setNovaTurma(null)}>
+      <Dialog
+        open={!!novaTurma}
+        onOpenChange={(o) => {
+          if (!o) {
+            setNovaTurma(null)
+            setTurmaEditando(null)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>🎓 Abrir turma em {nucleo.nome}</DialogTitle>
+            <DialogTitle>
+              {turmaEditando ? `🎓 Editar ${turmaEditando.nome}` : `🎓 Abrir turma em ${nucleo.nome}`}
+            </DialogTitle>
           </DialogHeader>
           {novaTurma && (
             <div className="space-y-4">
@@ -556,10 +840,39 @@ export default function NucleoDetalhe() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>🕐 Horário de início *</Label>
+                  <Input
+                    type="time"
+                    value={novaTurma.horario_inicio}
+                    onChange={(e) =>
+                      setNovaTurma({ ...novaTurma, horario_inicio: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>🕐 Horário de término *</Label>
+                  <Input
+                    type="time"
+                    value={novaTurma.horario_fim}
+                    onChange={(e) => setNovaTurma({ ...novaTurma, horario_fim: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                É este horário que a candidata vê e escolhe no formulário de inscrição.
+              </p>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNovaTurma(null)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setNovaTurma(null)
+                setTurmaEditando(null)
+              }}
+            >
               Cancelar
             </Button>
             <Button
@@ -568,7 +881,11 @@ export default function NucleoDetalhe() {
                 salvando || !novaTurma?.nome || !novaTurma?.dias_semana || !novaTurma?.turno
               }
             >
-              {salvando ? 'Abrindo...' : 'Abrir turma'}
+              {salvando
+                ? 'Salvando...'
+                : turmaEditando
+                  ? '💾 Salvar alterações'
+                  : 'Abrir turma'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -578,7 +895,7 @@ export default function NucleoDetalhe() {
       <Dialog open={!!novoVinculo} onOpenChange={(o) => !o && setNovoVinculo(null)}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>👥 Vincular profissional a uma turma</DialogTitle>
+            <DialogTitle>👥 Vincular profissionais a uma turma</DialogTitle>
           </DialogHeader>
           {novoVinculo && (
             <div className="space-y-4">
@@ -601,22 +918,23 @@ export default function NucleoDetalhe() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>👤 Profissional *</Label>
-                <Select
-                  value={novoVinculo.user_id}
-                  onValueChange={(v) => setNovoVinculo({ ...novoVinculo, user_id: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a pessoa..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profissionais.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nomeSocial || p.name} — {p.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>👤 Profissionais *</Label>
+                <MultiSelect
+                  options={profissionais.map((p) => ({
+                    value: p.id,
+                    label: p.nomeSocial?.trim() || p.name,
+                    hint: p.email,
+                  }))}
+                  value={novoVinculo.profissionais_ids}
+                  onChange={(v) => setNovoVinculo({ ...novoVinculo, profissionais_ids: v })}
+                  placeholder="Selecione as pessoas..."
+                  searchPlaceholder="Buscar por nome ou e-mail..."
+                  emptyMessage="Nenhum profissional cadastrado."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Todos os selecionados entram nesta turma com a mesma função. Quem já estiver na
+                  equipe é ignorado, sem erro.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>🏷️ Tipo de profissional na turma *</Label>
@@ -651,11 +969,129 @@ export default function NucleoDetalhe() {
               disabled={
                 salvando ||
                 !novoVinculo?.turma_id ||
-                !novoVinculo?.user_id ||
+                !novoVinculo?.profissionais_ids.length ||
                 !novoVinculo?.tipo_profissional
               }
             >
-              {salvando ? 'Vinculando...' : 'Vincular'}
+              {salvando
+                ? 'Vinculando...'
+                : `Vincular ${novoVinculo?.profissionais_ids.length ?? 0}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ------------------------------------------------- dialog alocar alunas */}
+      <Dialog open={!!alocacao} onOpenChange={(o) => !o && setAlocacao(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>🙋‍♀️ Alocar alunas em {alocacao?.turma.nome}</DialogTitle>
+          </DialogHeader>
+          {alocacao && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Alunas aprovadas do núcleo *</Label>
+                <MultiSelect
+                  options={alunas
+                    .filter((a) => a.turma_id !== alocacao.turma.id)
+                    .map((a) => ({
+                      value: a.user_id,
+                      label: a.nome_completo,
+                      hint: a.turma_id
+                        ? `hoje em ${a.turma_nome ?? turmasPorId[a.turma_id]?.nome ?? 'outra turma'}`
+                        : a.periodo_preferido
+                          ? `sem turma · pediu ${turnoLabel(a.periodo_preferido).toLowerCase()}`
+                          : 'sem turma',
+                    }))}
+                  value={alocacao.alunas_ids}
+                  onChange={(v) => setAlocacao({ ...alocacao, alunas_ids: v })}
+                  placeholder="Selecione as alunas..."
+                  searchPlaceholder="Buscar pelo nome..."
+                  emptyMessage="Nenhuma aluna disponível para esta turma."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Cada aluna fica em uma turma por vez: quem já está em outra turma do núcleo é
+                  transferida para esta.
+                  {alocacao.turma.capacidade
+                    ? ` A turma comporta ${alocacao.turma.capacidade} alunas — hoje tem ${
+                        (alunasPorTurma[alocacao.turma.id] ?? []).length
+                      }.`
+                    : ''}
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAlocacao(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={salvarAlocacao}
+              disabled={salvando || !alocacao?.alunas_ids.length}
+            >
+              {salvando ? 'Alocando...' : `Alocar ${alocacao?.alunas_ids.length ?? 0}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --------------------------------------------------- dialog apagar turma */}
+      <Dialog
+        open={!!turmaExcluir}
+        onOpenChange={(o) => {
+          if (!o) {
+            setTurmaExcluir(null)
+            setSenhaExclusao('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Apagar turma
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm">
+              <p className="font-semibold">
+                Tem certeza que deseja apagar &ldquo;{turmaExcluir?.nome}&rdquo;?
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                A ação é permanente. Turmas com aluna alocada, chamada ou registro de aula são
+                protegidas pelo sistema — nesses casos, desative a turma na edição em vez de apagar.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Senha da Gestão Geral *</Label>
+              <Input
+                type="password"
+                autoFocus
+                value={senhaExclusao}
+                onChange={(e) => setSenhaExclusao(e.target.value)}
+                placeholder="Digite sua senha para confirmar"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && senhaExclusao) confirmarExclusaoTurma()
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTurmaExcluir(null)
+                setSenhaExclusao('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={salvando || !senhaExclusao}
+              onClick={confirmarExclusaoTurma}
+            >
+              {salvando ? 'Apagando...' : 'Apagar permanentemente'}
             </Button>
           </DialogFooter>
         </DialogContent>

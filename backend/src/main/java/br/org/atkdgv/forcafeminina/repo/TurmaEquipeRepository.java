@@ -13,7 +13,11 @@ public interface TurmaEquipeRepository extends JpaRepository<TurmaEquipe, String
 
   List<TurmaEquipe> findByUserIdAndAtivoTrue(String userId);
 
+  List<TurmaEquipe> findByUserIdOrderByCreatedDesc(String userId);
+
   Optional<TurmaEquipe> findByTurmaIdAndUserId(String turmaId, String userId);
 
   boolean existsByTurmaIdAndAtivoTrue(String turmaId);
+
+  List<TurmaEquipe> findByTurmaId(String turmaId);
 }

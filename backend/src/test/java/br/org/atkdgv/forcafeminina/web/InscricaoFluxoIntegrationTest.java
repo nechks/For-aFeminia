@@ -7,10 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import br.org.atkdgv.forcafeminina.domain.Perfil;
+import br.org.atkdgv.forcafeminina.domain.Nucleo;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
+import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -34,9 +37,22 @@ class InscricaoFluxoIntegrationTest {
   private static final String SENHA = "Senha@Forte1";
 
   @Autowired private MockMvc mvc;
+  @Autowired private NucleoRepository nucleos;
   @Autowired private UsuarioRepository usuarios;
   @Autowired private PasswordEncoder passwordEncoder;
   @Autowired private ObjectMapper objectMapper;
+
+  @BeforeEach
+  void garantirNucleoDoFormulario() {
+    if (nucleos.existsByCodigo("CENTRO_VITORIA")) return;
+    Nucleo nucleo = new Nucleo();
+    nucleo.setCodigo("CENTRO_VITORIA");
+    nucleo.setNome("Centro - Vitória");
+    nucleo.setCidade("Vitória");
+    nucleo.setEstado("ES");
+    nucleo.setAtivo(true);
+    nucleos.save(nucleo);
+  }
 
   /** Gera um CPF válido a partir de 9 dígitos-base (mesmo algoritmo do controller). */
   private static String cpfValido(String base9) {
@@ -68,6 +84,18 @@ class InscricaoFluxoIntegrationTest {
           "estado": "ES",
           "cep": "29010-002",
           "turma": "CENTRO_VITORIA",
+          "zona_residencia": "Zona Urbana",
+          "cor_raca": "Parda",
+          "genero": "Mulher Cisgênero",
+          "orientacao_sexual": "Heterossexual",
+          "pcd": "Não",
+          "tem_filhos": "Não",
+          "ja_foi_aluna": "Não",
+          "recebe_beneficio_social": "Não",
+          "possui_cadunico": "Não",
+          "historico_violencia": "Não",
+          "como_conheceu": "Amigos/familiares",
+          "motivo_participar": "Quero participar das atividades do projeto.",
           "aceite_lgpd": true
         }
         """
@@ -86,12 +114,12 @@ class InscricaoFluxoIntegrationTest {
     return json.get("token").asText();
   }
 
-  private String criarGestao(String email) throws Exception {
+  private String criarAdministrativo(String email) throws Exception {
     Usuario g = new Usuario();
-    g.setName("Gestao Teste");
+    g.setName("Administrativo Teste");
     g.setEmail(email);
     g.setPasswordHash(passwordEncoder.encode(SENHA));
-    g.setPerfil(Perfil.GESTAO_GERAL);
+    g.setPerfil(Perfil.ADMINISTRATIVO);
     g.setAtivo(true);
     usuarios.save(g);
     return loginToken(email, SENHA);
@@ -128,10 +156,10 @@ class InscricaoFluxoIntegrationTest {
     String fichaId =
         objectMapper.readTree(criada.getResponse().getContentAsString()).get("id").asText();
 
-    String tokenGestao = criarGestao("gestao-aprova@teste.com");
+    String tokenAdministrativo = criarAdministrativo("administrativo-aprova@teste.com");
     mvc.perform(
             patch("/api/inscricoes/" + fichaId)
-                .header("Authorization", "Bearer " + tokenGestao)
+                .header("Authorization", "Bearer " + tokenAdministrativo)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"APROVADA\"}"))
         .andExpect(status().isOk());
@@ -156,10 +184,10 @@ class InscricaoFluxoIntegrationTest {
     String fichaId =
         objectMapper.readTree(criada.getResponse().getContentAsString()).get("id").asText();
 
-    String tokenGestao = criarGestao("gestao-reprova@teste.com");
+    String tokenAdministrativo = criarAdministrativo("administrativo-reprova@teste.com");
     mvc.perform(
             patch("/api/inscricoes/" + fichaId)
-                .header("Authorization", "Bearer " + tokenGestao)
+                .header("Authorization", "Bearer " + tokenAdministrativo)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"status\":\"REPROVADA\"}"))
         .andExpect(status().isOk());

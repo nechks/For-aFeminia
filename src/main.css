@@ -5,56 +5,78 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Paleta da identidade do Força Feminina: roxo, rosa e laranja, tirados da camisa do projeto
+   * (degradê magenta → laranja). Contraste conferido: branco sobre roxo 11.1, branco sobre rosa
+   * 5.6. Branco sobre laranja fica em 2.8 — por isso o laranja leva texto escuro.
+   */
   :root {
-    --background: 210 40% 98%;
-    --foreground: 244 47% 10%;
+    --background: 280 30% 98%;
+    --foreground: 280 45% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 244 47% 10%;
+    --card-foreground: 280 45% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 244 47% 10%;
+    --popover-foreground: 280 45% 12%;
 
-    /* Primary: Deep Indigo */
-    --primary: 244 47% 20%;
-    --primary-foreground: 210 40% 98%;
+    /* Roxo: ações principais, títulos e foco */
+    --primary: 278 62% 30%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Secondary: Teal */
-    --secondary: 175 84% 32%;
-    --secondary-foreground: 210 40% 98%;
+    /* Rosa (magenta da camisa) para destaque e para o degradê da marca */
+    --rosa: 338 78% 44%;
+    --rosa-foreground: 0 0% 100%;
 
-    /* Accent: Soft Lavender */
-    --accent: 255 92% 82%;
-    --accent-foreground: 244 47% 20%;
+    /*
+     * Secondary é a variante discreta dos componentes (badge, botão, trilho de progresso). Fica em
+     * rosa claro: rosa forte ali faria a barra de progresso parecer cheia.
+     */
+    --secondary: 338 80% 95%;
+    --secondary-foreground: 338 75% 32%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Laranja: destaque. Texto sobre ele é escuro; texto laranja usa --laranja-texto. */
+    --laranja: 26 92% 52%;
+    --laranja-foreground: 280 45% 12%;
+    --laranja-texto: 24 90% 38%;
+
+    /* Accent é o fundo de hover de menus e botões fantasma: pêssego claro puxado do laranja */
+    --accent: 28 100% 94%;
+    --accent-foreground: 22 80% 26%;
+
+    --muted: 280 25% 95%;
+    --muted-foreground: 280 20% 45%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 244 47% 20%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 20% 89%;
+    --input: 280 20% 89%;
+    --ring: 278 62% 30%;
     --radius: 0.75rem;
   }
 
   .dark {
-    --background: 244 47% 10%;
-    --foreground: 210 40% 98%;
-    --card: 244 47% 15%;
-    --card-foreground: 210 40% 98%;
-    --popover: 244 47% 15%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 244 47% 20%;
-    --secondary: 175 84% 42%;
-    --secondary-foreground: 244 47% 10%;
-    --accent: 255 92% 70%;
-    --accent-foreground: 244 47% 10%;
-    --muted: 244 47% 20%;
-    --muted-foreground: 215.4 16.3% 66.9%;
+    --background: 280 40% 9%;
+    --foreground: 280 20% 96%;
+    --card: 280 35% 13%;
+    --card-foreground: 280 20% 96%;
+    --popover: 280 35% 13%;
+    --popover-foreground: 280 20% 96%;
+    --primary: 278 70% 72%;
+    --primary-foreground: 280 40% 9%;
+    --rosa: 338 80% 62%;
+    --rosa-foreground: 280 40% 9%;
+    --secondary: 338 40% 22%;
+    --secondary-foreground: 338 80% 85%;
+    --laranja: 26 95% 58%;
+    --laranja-foreground: 280 40% 9%;
+    --laranja-texto: 26 95% 62%;
+    --accent: 280 30% 20%;
+    --accent-foreground: 280 20% 96%;
+    --muted: 280 30% 18%;
+    --muted-foreground: 280 15% 68%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 244 47% 25%;
-    --input: 244 47% 25%;
-    --ring: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 25% 22%;
+    --input: 280 25% 22%;
+    --ring: 278 70% 72%;
   }
 }
 
@@ -68,6 +90,14 @@
 }
 
 @layer utilities {
+  .bg-marca {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--primary)),
+      hsl(var(--rosa)),
+      hsl(var(--laranja))
+    );
+  }
   .animate-fade-in {
     animation: fade-in 0.3s ease-out forwards;
   }

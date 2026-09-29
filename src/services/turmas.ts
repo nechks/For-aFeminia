@@ -7,6 +7,9 @@ export interface Turma {
   nome: string
   dias_semana: string
   turno: string
+  /** Horário próprio da turma, em HH:mm — é o que a candidata escolhe na inscrição. */
+  horario_inicio?: string
+  horario_fim?: string
   capacidade?: number
   ativo: boolean
 }
@@ -55,6 +58,16 @@ export const getMinhasTurmas = () => api.get<MinhaTurma[]>('/api/turmas/minhas')
 
 export const criarTurma = (data: Partial<Turma>) => api.post<Turma>('/api/turmas', data)
 
+export const editarTurma = (id: string, data: Partial<Turma>) =>
+  api.put<Turma>(`/api/turmas/${id}`, data)
+
+/**
+ * Exclui a turma. Exige a senha da Gestão Geral e é recusada pelo backend quando a turma já tem
+ * aluna alocada, chamada ou registro de aula — nesses casos o caminho é desativá-la na edição.
+ */
+export const excluirTurma = (id: string, senha: string) =>
+  api.delete<void>(`/api/turmas/${id}`, { senha })
+
 export const getEquipeTurma = (turmaId: string) =>
   api.get<MembroEquipe[]>(`/api/turmas/${turmaId}/equipe`)
 
@@ -76,6 +89,21 @@ export const getAlunasTurma = (turmaId: string) =>
 
 export const alocarAluna = (turmaId: string, userId: string) =>
   api.post<AlunaTurma>(`/api/turmas/${turmaId}/alunas`, { user_id: userId })
+
+/** Resultado da alocação em lote: quem entrou, quem já estava e quem foi recusada (e por quê). */
+export interface AlocacaoEmLote {
+  turma_id: string
+  alocadas: string[]
+  ja_na_turma: string[]
+  recusadas: { user_id: string; nome?: string; motivo: string }[]
+}
+
+/**
+ * Aloca várias alunas na turma de uma vez. Recusas individuais (outro núcleo, turma lotada) não
+ * derrubam o lote — as válidas entram e a resposta explica quem ficou de fora.
+ */
+export const alocarAlunasEmLote = (turmaId: string, alunasIds: string[]) =>
+  api.post<AlocacaoEmLote>(`/api/turmas/${turmaId}/alunas/lote`, { alunas_ids: alunasIds })
 
 export const desalocarAluna = (turmaId: string, userId: string) =>
   api.delete<void>(`/api/turmas/${turmaId}/alunas/${userId}`)

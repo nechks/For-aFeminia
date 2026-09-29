@@ -47,11 +47,13 @@ public class SecurityConfig {
                     // Cadastro público de professor (vira solicitação pendente de aprovação).
                     .requestMatchers(HttpMethod.POST, "/api/cadastro-professor")
                     .permitAll()
-                    .requestMatchers(HttpMethod.GET, "/api/profissoes")
-                    .permitAll()
                     // Lista enxuta de núcleos (código, nome e períodos com turma) para a
                     // candidata escolher onde quer estudar antes de ter login.
                     .requestMatchers(HttpMethod.GET, "/api/nucleos/publicos")
+                    .permitAll()
+                    // Municípios atendidos: o formulário precisa saber onde há projeto ativo para
+                    // encerrar a inscrição de quem mora fora da área antes de perguntar a turma.
+                    .requestMatchers(HttpMethod.GET, "/api/municipios-atendidos/publicos")
                     .permitAll()
                     // Arquivos (documentos de inscrição, avatares) contêm dados pessoais
                     // sensíveis e exigem autenticação — via header ou ?token= (imagens <img>).

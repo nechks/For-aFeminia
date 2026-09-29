@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PainelTurma, useMinhasTurmas } from '@/components/turmas/MinhasTurmas'
+import MeuHistorico from '@/components/profissional/MeuHistorico'
 import { useToast } from '@/hooks/use-toast'
 import { getErrorMessage } from '@/lib/api/errors'
-import { Camera, GraduationCap, KeyRound, Loader2, Save, User } from 'lucide-react'
+import { Camera, GraduationCap, History, KeyRound, Loader2, Save, User } from 'lucide-react'
 
 function AlterarSenhaCard() {
   const { toast } = useToast()
@@ -116,9 +117,11 @@ export default function PerfilAluna() {
  * não tem vínculo com turma — alunas e o pessoal administrativo — vê só os dados da conta.
  */
 function PerfilComTurmas() {
+  const { user } = useApp()
   const { turmas, loading } = useMinhasTurmas()
+  const isProfissional = Boolean(user?.tipo_profissional || turmas.length)
 
-  if (loading || !turmas.length) return <DadosDaConta />
+  if (loading || (!turmas.length && !isProfissional)) return <DadosDaConta />
 
   return (
     <Tabs defaultValue="conta" className="space-y-6">
@@ -127,6 +130,12 @@ function PerfilComTurmas() {
           <User className="mr-1.5 h-4 w-4" />
           Meu perfil
         </TabsTrigger>
+        {isProfissional && (
+          <TabsTrigger value="historico">
+            <History className="mr-1.5 h-4 w-4" />
+            Histórico
+          </TabsTrigger>
+        )}
         {turmas.map((v) => (
           <TabsTrigger key={v.turma.id} value={v.turma.id}>
             <GraduationCap className="mr-1.5 h-4 w-4" />
@@ -138,6 +147,11 @@ function PerfilComTurmas() {
       <TabsContent value="conta">
         <DadosDaConta />
       </TabsContent>
+      {isProfissional && (
+        <TabsContent value="historico">
+          <MeuHistorico />
+        </TabsContent>
+      )}
       {turmas.map((v) => (
         <TabsContent key={v.turma.id} value={v.turma.id}>
           <PainelTurma vinculo={v} />

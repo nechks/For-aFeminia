@@ -19,10 +19,19 @@ public interface FichaInscricaoRepository extends JpaRepository<FichaInscricao, 
   List<FichaInscricao> findByTurmaAndStatusOrderByNomeCompletoAsc(
       String turma, StatusInscricao status);
 
+  long countByTurmaAndStatusAndAcessoAtivoTrue(String turma, StatusInscricao status);
+
   List<FichaInscricao> findByTurmaIdAndStatusOrderByNomeCompletoAsc(
       String turmaId, StatusInscricao status);
 
   List<FichaInscricao> findByStatus(StatusInscricao status);
+
+  List<FichaInscricao> findByTurmaInAndStatusOrderByNomeCompletoAsc(
+      List<String> turmas, StatusInscricao status);
+
+  List<FichaInscricao> findByTurmaIn(List<String> turmas);
+
+  List<FichaInscricao> findByStatusAndDataPrimeiraAulaIsNull(StatusInscricao status);
 
   boolean existsByTurmaId(String turmaId);
 
@@ -43,4 +52,16 @@ public interface FichaInscricaoRepository extends JpaRepository<FichaInscricao, 
       @Param("turma") String turma,
       @Param("search") String search,
       Pageable pageable);
+
+  @Query("""
+      SELECT f FROM FichaInscricao f
+      WHERE (:status IS NULL OR f.status = :status)
+        AND (:turma IS NULL OR f.turma = :turma)
+        AND (:search IS NULL OR LOWER(f.nomeCompleto) LIKE LOWER(CONCAT('%', :search, '%'))
+             OR f.cpf LIKE CONCAT('%', :search, '%'))
+      """)
+  List<FichaInscricao> searchForPriority(
+      @Param("status") StatusInscricao status,
+      @Param("turma") String turma,
+      @Param("search") String search);
 }

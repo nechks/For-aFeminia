@@ -155,9 +155,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   const minhaInscricao = user?.perfil === 'ALUNA_FF' ? (inscricoes[0] ?? null) : null
+  /**
+   * Aluna com acesso pleno ao sistema. Além da inscrição aprovada e da ficha entregue, o vínculo
+   * precisa estar ativo: quando o projeto é finalizado e a gestão renova o ciclo, ela volta a
+   * entrar mas fica limitada a Meu Perfil e à nova Ficha de Confirmação até respondê-la.
+   */
   const alunaLiberada =
     user?.perfil === 'ALUNA_FF'
-      ? minhaInscricao?.status === 'APROVADA' && !!minhaConfirmacao
+      ? minhaInscricao?.status === 'APROVADA' &&
+        !!minhaConfirmacao &&
+        minhaInscricao?.acesso_ativo !== false
       : true
   const alunaGateReady =
     user?.perfil !== 'ALUNA_FF' || (inscricoesLoaded && confirmacaoLoaded)

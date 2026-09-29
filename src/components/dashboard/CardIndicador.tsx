@@ -35,7 +35,7 @@ export default function CardIndicador({
       }}
       className="cursor-pointer transition hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm font-medium">{titulo}</CardTitle>
         <Icone className={cn('h-4 w-4', corIcone)} />
       </CardHeader>

@@ -123,7 +123,7 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {summaryCards.map((s) => (
           <Card key={s.label}>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-medium leading-tight">{s.label}</CardTitle>
               <s.icon className={`h-4 w-4 shrink-0 ${s.color}`} />
             </CardHeader>
@@ -141,7 +141,7 @@ export default function AdminDashboardPage() {
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <Card>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-medium">Total de Aulas</CardTitle>
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -150,7 +150,7 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-medium">Presenças Registradas</CardTitle>
               <UserCheck className="h-4 w-4 text-emerald-500" />
             </CardHeader>
@@ -161,7 +161,7 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-xs font-medium">Faltas Registradas</CardTitle>
               <UserX className="h-4 w-4 text-rose-500" />
             </CardHeader>

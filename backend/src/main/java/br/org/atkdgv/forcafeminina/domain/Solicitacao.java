@@ -18,7 +18,8 @@ import java.util.UUID;
     name = "solicitacoes",
     indexes = {
       @Index(name = "idx_solicitacoes_status", columnList = "status"),
-      @Index(name = "idx_solicitacoes_tipo", columnList = "tipo")
+      @Index(name = "idx_solicitacoes_tipo", columnList = "tipo"),
+      @Index(name = "idx_solicitacoes_nucleo", columnList = "nucleo")
     })
 public class Solicitacao {
 
@@ -28,6 +29,10 @@ public class Solicitacao {
 
   @Column(nullable = false, length = 40)
   private String tipo;
+
+  /** Código do núcleo ao qual a solicitação pertence. Nulo nos registros gerais/legados. */
+  @Column(length = 80)
+  private String nucleo;
 
   /** Dados públicos da solicitação (nome, e-mail etc.). */
   @Column(nullable = false, columnDefinition = "TEXT")
@@ -77,6 +82,8 @@ public class Solicitacao {
   public String getId() { return id; }
   public String getTipo() { return tipo; }
   public void setTipo(String tipo) { this.tipo = tipo; }
+  public String getNucleo() { return nucleo; }
+  public void setNucleo(String nucleo) { this.nucleo = nucleo; }
   public String getDados() { return dados; }
   public void setDados(String dados) { this.dados = dados; }
   public String getSenhaHash() { return senhaHash; }

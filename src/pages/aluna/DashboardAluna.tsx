@@ -168,11 +168,11 @@ export default function DashboardAluna() {
       </div>
 
       {precisaPreencherFicha && (
-        <Card className="bg-secondary/10 border-secondary/20 shadow-sm animate-slide-up">
+        <Card className="bg-rosa/10 border-rosa/20 shadow-sm animate-slide-up">
           <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="bg-secondary/20 p-3 rounded-full mt-1">
-                <FileText className="w-6 h-6 text-secondary" />
+              <div className="bg-rosa/20 p-3 rounded-full mt-1">
+                <FileText className="w-6 h-6 text-rosa" />
               </div>
               <div>
                 <h3 className="font-semibold text-lg">Ação Necessária: Ficha de Confirmação</h3>
@@ -181,7 +181,7 @@ export default function DashboardAluna() {
                 </p>
               </div>
             </div>
-            <Button asChild className="shrink-0 bg-secondary hover:bg-secondary/90">
+            <Button asChild className="shrink-0 bg-rosa hover:bg-rosa/90">
               <Link to="/aluna/ficha">
                 Preencher Agora <ArrowRight className="w-4 h-4 ml-2" />
               </Link>
@@ -210,7 +210,7 @@ export default function DashboardAluna() {
                       cy="64"
                     />
                     <circle
-                      className="text-secondary stroke-current"
+                      className="text-rosa stroke-current"
                       strokeWidth="10"
                       strokeDasharray={2 * Math.PI * 56}
                       strokeDashoffset={
@@ -242,7 +242,7 @@ export default function DashboardAluna() {
                   <Progress
                     value={dashboard?.percentualFrequencia ?? 0}
                     className="h-2 bg-muted"
-                    indicatorClassName="bg-secondary"
+                    indicatorClassName="bg-rosa"
                   />
                   <p className="text-sm text-muted-foreground">
                     Continue assim! A presença regular é essencial para o certificado.
@@ -277,7 +277,7 @@ export default function DashboardAluna() {
                           {turmaLabels[aviso.turma] ?? aviso.turma}
                         </span>
                       ) : (
-                        <span className="text-xs font-medium text-secondary px-2 py-1 bg-secondary/10 rounded-full">
+                        <span className="text-xs font-medium text-rosa px-2 py-1 bg-rosa/10 rounded-full">
                           Geral
                         </span>
                       )}
@@ -364,7 +364,7 @@ export default function DashboardAluna() {
             <CardContent>
               <div className="space-y-3">
                 <div className="flex items-center text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-secondary mr-2" />
+                  <CheckCircle2 className="w-4 h-4 text-rosa mr-2" />
                   <span className="font-medium">
                     {turmaLabels[dashboard?.turma ?? ''] ??
                       ((dashboard?.turma ?? '').replace(/_/g, ' ') || '—')}

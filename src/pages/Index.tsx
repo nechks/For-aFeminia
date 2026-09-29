@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
+import Logo from '@/components/Logo'
 import { useNavigate, Link } from 'react-router-dom'
 import { useApp } from '@/store/app-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Shield } from 'lucide-react'
 import { getErrorMessage } from '@/lib/api/errors'
 
 export default function Index() {
@@ -49,7 +49,7 @@ export default function Index() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background">
-      <div className="flex-1 relative flex flex-col justify-center p-8 md:p-16 bg-primary text-primary-foreground overflow-hidden">
+      <div className="flex-1 relative flex flex-col justify-center p-8 md:p-16 bg-gradient-to-br from-primary via-primary to-rosa text-primary-foreground overflow-hidden">
         <div className="absolute inset-0 opacity-20">
           <img
             src="https://img.usecurling.com/p/800/1200?q=martial%20arts%20women&color=black"
@@ -59,7 +59,7 @@ export default function Index() {
         </div>
         <div className="relative z-10 max-w-xl animate-slide-up">
           <div className="flex items-center gap-3 mb-6">
-            <Shield className="w-10 h-10 text-secondary" />
+            <Logo className="h-16 w-16 drop-shadow-lg" />
             <h1 className="text-2xl font-bold tracking-wider">ATKDGV</h1>
           </div>
           <h2 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
@@ -72,7 +72,7 @@ export default function Index() {
           <Button
             asChild
             size="lg"
-            className="bg-secondary hover:bg-secondary/90 text-white text-lg h-14 px-8 shadow-lg"
+            className="bg-laranja hover:bg-laranja/90 text-laranja-foreground text-lg font-semibold h-14 px-8 shadow-lg"
           >
             <Link to="/inscricao">Quero me Inscrever</Link>
           </Button>
@@ -80,7 +80,7 @@ export default function Index() {
       </div>
 
       <div className="w-full md:w-[450px] flex items-center justify-center p-8 bg-card shadow-[-20px_0_30px_-15px_rgba(0,0,0,0.1)] z-10 relative">
-        <Card className="w-full border-none shadow-none">
+        <Card variant="plano" className="w-full border-none shadow-none">
           <CardHeader className="px-0">
             <CardTitle className="text-2xl font-bold">Acessar Sistema</CardTitle>
             <CardDescription>

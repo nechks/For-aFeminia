@@ -46,7 +46,7 @@ function PizzaTurma({ turma, onClick }: { turma: IndicadorTurma; onClick: () => 
       }}
       className="cursor-pointer transition hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      <CardHeader className="pb-2">
+      <CardHeader>
         <CardTitle className="flex items-center justify-between gap-2 text-base">
           <span className="truncate">{turma.turma_nome}</span>
           <Badge variant="secondary" className="shrink-0">

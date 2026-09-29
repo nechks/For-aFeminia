@@ -62,7 +62,7 @@ export function PainelTurma({ vinculo }: { vinculo: MinhaTurma }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">{vinculo.turma.nome}</CardTitle>
+        <CardTitle>{vinculo.turma.nome}</CardTitle>
         <div className="flex flex-wrap items-center gap-2 pt-1 text-sm text-muted-foreground">
           <Badge variant="secondary">{tipoProfissionalLabel(vinculo.tipo_profissional)}</Badge>
           <span>🏠 {vinculo.nucleo_nome}</span>

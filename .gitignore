@@ -55,3 +55,7 @@ backend/uploads/
 
 # Linux kernel core dumps (e.g. when oxfmt or pnpm crash)
 core.[0-9]*
+
+# Artefatos de build do TypeScript e logs locais de agentes
+*.tsbuildinfo
+.codex/*.log

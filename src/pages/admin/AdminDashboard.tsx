@@ -201,7 +201,7 @@ export default function AdminDashboard() {
           },
         ].map((s) => (
           <Card key={s.label}>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-sm font-medium">{s.label}</CardTitle>
               <s.icon className={`h-4 w-4 ${s.color}`} />
             </CardHeader>

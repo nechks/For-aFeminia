@@ -14,7 +14,10 @@ import java.util.UUID;
 @Entity
 @Table(
     name = "ficha_confirmacao_ff",
-    uniqueConstraints = @UniqueConstraint(name = "idx_ficha_conf_user", columnNames = "userId"))
+    uniqueConstraints =
+        @UniqueConstraint(
+            name = "uk_ficha_conf_user_ciclo",
+            columnNames = {"userId", "cicloId"}))
 public class FichaConfirmacao {
 
   @Id
@@ -28,6 +31,15 @@ public class FichaConfirmacao {
   @JsonProperty("inscricao_id")
   @Column(nullable = false, length = 36)
   private String inscricaoId;
+
+  /**
+   * Ciclo a que esta ficha pertence. A renovação abre um ciclo novo e uma ficha nova — a anterior
+   * fica intacta no histórico. Fichas anteriores à renovação de ciclo têm este campo preenchido
+   * pelo backfill do SchemaPatch.
+   */
+  @JsonProperty("ciclo_id")
+  @Column(length = 36)
+  private String cicloId;
 
   @Column(length = 20)
   private String status;
@@ -91,6 +103,8 @@ public class FichaConfirmacao {
   public void setUserId(String userId) { this.userId = userId; }
   public String getInscricaoId() { return inscricaoId; }
   public void setInscricaoId(String inscricaoId) { this.inscricaoId = inscricaoId; }
+  public String getCicloId() { return cicloId; }
+  public void setCicloId(String cicloId) { this.cicloId = cicloId; }
   public String getStatus() { return status; }
   public void setStatus(String status) { this.status = status; }
   public String getSecao1Dados() { return secao1Dados; }

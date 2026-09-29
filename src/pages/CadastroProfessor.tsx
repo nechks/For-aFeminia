@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Logo from '@/components/Logo'
 import { Link } from 'react-router-dom'
 import { submitCadastroProfessor, CadastroProfessorError } from '@/services/cadastro-professor'
 import {
@@ -26,9 +27,8 @@ import {
   CardTitle,
   CardFooter,
 } from '@/components/ui/card'
-import { Shield, ArrowLeft, CheckCircle2, Loader2, Upload } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Loader2, Upload } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
-import { ProfissaoAutocomplete } from '@/components/ProfissaoAutocomplete'
 
 // Campos de texto/seleção do formulário (documentos são tratados à parte).
 const camposTexto = [
@@ -374,7 +374,7 @@ export default function CadastroProfessor() {
   if (enviado) {
     return (
       <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md text-center border-none shadow-xl animate-slide-up">
+        <Card variant="plano" className="w-full max-w-md text-center border-none shadow-xl animate-slide-up">
           <CardHeader>
             <div className="mx-auto bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
               <CheckCircle2 className="w-8 h-8 text-green-600" />
@@ -410,14 +410,14 @@ export default function CadastroProfessor() {
           Voltar
         </Link>
         <div className="flex items-center gap-2">
-          <Shield className="w-8 h-8 text-primary" />
+          <Logo className="h-11 w-11" />
           <h1 className="text-xl font-bold text-primary">Força Feminina</h1>
         </div>
         <div className="w-16" />
       </div>
 
       <form onSubmit={handleSubmit} className="w-full max-w-2xl space-y-6">
-        <Card className="border-none shadow-elevation">
+        <Card variant="plano" className="border-none shadow-elevation">
           <CardHeader>
             <CardTitle className="text-2xl">Cadastro da Equipe</CardTitle>
             <CardDescription>
@@ -430,7 +430,7 @@ export default function CadastroProfessor() {
         {/* Dados pessoais */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Dados pessoais</CardTitle>
+            <CardTitle>Dados pessoais</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -501,9 +501,10 @@ export default function CadastroProfessor() {
             </div>
             <div className="space-y-2">
               <Label>Profissão *</Label>
-              <ProfissaoAutocomplete
+              <Input
                 value={form.profissao}
-                onChange={(valor) => set('profissao', valor)}
+                onChange={(e) => set('profissao', e.target.value)}
+                placeholder="Ex.: professora de defesa pessoal"
               />
               {erroMsg('profissao')}
             </div>
@@ -513,7 +514,7 @@ export default function CadastroProfessor() {
         {/* Empresa */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Empresa / MEI</CardTitle>
+            <CardTitle>Empresa / MEI</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -535,7 +536,7 @@ export default function CadastroProfessor() {
         {/* Endereços */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Endereços</CardTitle>
+            <CardTitle>Endereços</CardTitle>
           </CardHeader>
           <CardContent className="space-y-7">
             <BlocoEndereco
@@ -579,7 +580,7 @@ export default function CadastroProfessor() {
         {/* Uniforme, pagamento e vínculo */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Uniforme, dados bancários e vínculo</CardTitle>
+            <CardTitle>Uniforme, dados bancários e vínculo</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -672,7 +673,7 @@ export default function CadastroProfessor() {
         {/* Acesso */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Dados de acesso</CardTitle>
+            <CardTitle>Dados de acesso</CardTitle>
             <CardDescription>
               Use estes dados para entrar no sistema após a aprovação.
             </CardDescription>
@@ -702,7 +703,7 @@ export default function CadastroProfessor() {
         {/* Documentos */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Documentos</CardTitle>
+            <CardTitle>Documentos</CardTitle>
             <CardDescription>Anexe os documentos em PDF ou imagem (JPG/PNG).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

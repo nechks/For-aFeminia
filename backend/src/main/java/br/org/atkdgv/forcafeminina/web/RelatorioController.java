@@ -169,7 +169,7 @@ public class RelatorioController {
     body.put("usuario", usuarios.findById(userId).orElse(null));
     body.put("inscricao", inscricao);
 
-    FichaConfirmacao confirmacao = confirmacoes.findByUserId(userId).orElse(null);
+    FichaConfirmacao confirmacao = confirmacoes.findFirstByUserIdOrderByCreatedDesc(userId).orElse(null);
     body.put("confirmacao", confirmacao);
     List<DocumentoAnexo> docs =
         confirmacao == null ? List.of() : documentos.findByConfirmacaoId(confirmacao.getId());
@@ -295,7 +295,7 @@ public class RelatorioController {
       todos.put("faltas", faltas); todos.put("inicio_projeto", inicio == null ? "" : inicio);
       todos.put("termino_projeto", termino == null ? "" : termino);
       if (f.getUserId() != null) {
-        confirmacoes.findByUserId(f.getUserId()).ifPresent(conf -> adicionarDadosConfirmacao(todos, conf));
+        confirmacoes.findFirstByUserIdOrderByCreatedDesc(f.getUserId()).ifPresent(conf -> adicionarDadosConfirmacao(todos, conf));
       }
       Map<String, Object> linha = new LinkedHashMap<>();
       campos.forEach(c -> linha.put(c, todos.get(c) == null ? "" : todos.get(c)));
