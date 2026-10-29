@@ -2,8 +2,12 @@ package br.org.atkdgv.forcafeminina.web;
 
 import br.org.atkdgv.forcafeminina.domain.CalendarioAula;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
+import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.CalendarioAulaRepository;
+import br.org.atkdgv.forcafeminina.service.AlunaAcessoService;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,14 +25,23 @@ import org.springframework.web.bind.annotation.RestController;
 public class CalendarioController {
 
   private final CalendarioAulaRepository calendario;
+  private final AlunaAcessoService acessoAluna;
 
-  public CalendarioController(CalendarioAulaRepository calendario) {
+  public CalendarioController(CalendarioAulaRepository calendario, AlunaAcessoService acessoAluna) {
     this.calendario = calendario;
+    this.acessoAluna = acessoAluna;
   }
 
   @GetMapping
   public List<CalendarioAula> list(@RequestParam(required = false) String turma) {
-    CurrentUser.get();
+    Usuario atual = CurrentUser.get();
+    if (atual.getPerfil() == Perfil.ALUNA_FF) {
+      // A aluna vê só o calendário do próprio núcleo, e só depois de liberada.
+      return acessoAluna
+          .nucleoDaAlunaLiberada(atual)
+          .map(calendario::findByTurmaOrderByDataAulaAsc)
+          .orElse(List.of());
+    }
     if (turma == null || turma.isBlank()) {
       return calendario.findAllByOrderByDataAulaAsc();
     }
@@ -45,6 +58,17 @@ public class CalendarioController {
     }
     if (req.dataAula() == null || req.dataAula().isBlank()) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "data_aula é obrigatório.");
+    }
+    try {
+      LocalDate.parse(req.dataAula());
+    } catch (DateTimeParseException e) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "data_invalida", "Informe a data da aula no formato AAAA-MM-DD.");
+    }
+    // A data repetida contaria a mesma aula duas vezes no total usado para a frequência.
+    if (calendario.existsByTurmaAndDataAula(req.turma(), req.dataAula())) {
+      throw new ApiException(
+          HttpStatus.CONFLICT, "aula_duplicada", "Já existe aula cadastrada nesta data para o núcleo.");
     }
     CalendarioAula aula = new CalendarioAula();
     aula.setTurma(req.turma());

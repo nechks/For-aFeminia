@@ -4,16 +4,22 @@ import br.org.atkdgv.forcafeminina.domain.Atendimento;
 import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
+import br.org.atkdgv.forcafeminina.domain.TurmaEquipe;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.AtendimentoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
+import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaEquipeRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import br.org.atkdgv.forcafeminina.service.LoginAttemptService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,25 +41,46 @@ public class AtendimentoController {
   private final FichaInscricaoRepository inscricoes;
   private final PasswordEncoder passwordEncoder;
   private final LoginAttemptService loginAttempts;
+  private final TurmaEquipeRepository equipe;
+  private final TurmaRepository turmas;
+  private final NucleoRepository nucleos;
 
   public AtendimentoController(
       AtendimentoRepository atendimentos,
       UsuarioRepository usuarios,
       FichaInscricaoRepository inscricoes,
       PasswordEncoder passwordEncoder,
-      LoginAttemptService loginAttempts) {
+      LoginAttemptService loginAttempts,
+      TurmaEquipeRepository equipe,
+      TurmaRepository turmas,
+      NucleoRepository nucleos) {
     this.atendimentos = atendimentos;
     this.usuarios = usuarios;
     this.inscricoes = inscricoes;
     this.passwordEncoder = passwordEncoder;
     this.loginAttempts = loginAttempts;
+    this.equipe = equipe;
+    this.turmas = turmas;
+    this.nucleos = nucleos;
   }
 
-  /** Público: qualquer perfil autorizado vê. Confidencial: só quem criou vê. */
+  /**
+   * Público: perfis da equipe veem; o(a) professor(a), só os dos próprios núcleos. Confidencial: só
+   * quem criou vê. Alunas não acessam atendimentos.
+   */
   @GetMapping
   public List<Map<String, Object>> list() {
-    Usuario atual = CurrentUser.get();
+    Usuario atual =
+        CurrentUser.require(
+            Perfil.PROFESSOR, Perfil.ADMINISTRATIVO, Perfil.ASSISTENTE_SOCIAL, Perfil.GESTAO_GERAL);
     List<Atendimento> visiveis = atendimentos.findVisiveisPara(atual.getId());
+    if (atual.getPerfil() == Perfil.PROFESSOR) {
+      Set<String> meusNucleos = nucleosDoProfissional(atual);
+      visiveis =
+          visiveis.stream()
+              .filter(a -> atual.getId().equals(a.getCreatedBy()) || meusNucleos.contains(a.getTurma()))
+              .toList();
+    }
     List<Map<String, Object>> body = new ArrayList<>();
     for (Atendimento a : visiveis) {
       Map<String, Object> item = new LinkedHashMap<>();
@@ -83,13 +110,28 @@ public class AtendimentoController {
    */
   private void enforceNucleoAtendimento(Usuario atual, String turma) {
     if (atual.getPerfil() != Perfil.PROFESSOR) return;
-    String nucleo = atual.getTurma();
-    if (nucleo == null || nucleo.isBlank() || !nucleo.equals(turma)) {
+    if (turma == null || !nucleosDoProfissional(atual).contains(turma)) {
       throw new ApiException(
           HttpStatus.FORBIDDEN,
           "nucleo_invalido",
           "Professor(a) só pode fazer atendimento para alunas do próprio núcleo.");
     }
+  }
+
+  /**
+   * Códigos dos núcleos em que a pessoa atua: os das turmas com vínculo ativo, mais o núcleo do
+   * vínculo principal (contas antigas, anteriores à equipe por turma). O vínculo principal não pode
+   * ser alterado pela própria pessoa.
+   */
+  private Set<String> nucleosDoProfissional(Usuario atual) {
+    Set<String> codigos = new HashSet<>();
+    if (atual.getTurma() != null && !atual.getTurma().isBlank()) codigos.add(atual.getTurma());
+    List<String> turmaIds =
+        equipe.findByUserIdAndAtivoTrue(atual.getId()).stream().map(TurmaEquipe::getTurmaId).toList();
+    Set<String> nucleoIds = new HashSet<>();
+    turmas.findAllById(turmaIds).forEach(t -> nucleoIds.add(t.getNucleoId()));
+    nucleos.findAllById(nucleoIds).forEach(n -> codigos.add(n.getCodigo()));
+    return codigos;
   }
 
   /** Lista as alunas aprovadas de uma turma para o formulário de atendimento. */
@@ -134,7 +176,20 @@ public class AtendimentoController {
       throw new ApiException(
           HttpStatus.BAD_REQUEST, "bad_request", "Todos os campos são obrigatórios.");
     }
+    if (!"PUBLICO".equals(req.tipoAcesso()) && !"CONFIDENCIAL".equals(req.tipoAcesso())) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "tipo_acesso_invalido", "Tipo de acesso deve ser PUBLICO ou CONFIDENCIAL.");
+    }
     enforceNucleoAtendimento(atual, req.turma());
+    boolean alunaDoNucleo =
+        inscricoes
+            .findFirstByUserIdAndStatus(req.alunaId(), StatusInscricao.APROVADA)
+            .filter(f -> req.turma().equals(f.getTurma()))
+            .isPresent();
+    if (!alunaDoNucleo) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "aluna_invalida", "Selecione uma aluna aprovada deste núcleo.");
+    }
     Atendimento a = new Atendimento();
     a.setCreatedBy(atual.getId());
     a.setAlunaId(req.alunaId());

@@ -230,7 +230,9 @@ public class InscricaoController {
 
   /**
    * Endpoint público de inscrição — regras do Projeto Força Feminina. A candidata cria seu login
-   * (e-mail + senha) junto com a inscrição; a conta nasce inativa e só é liberada na aprovação.
+   * (e-mail + senha) junto com a inscrição. A conta nasce ativa para ela acompanhar a inscrição e
+   * preencher a ficha; mural, eventos e calendário só são liberados com a inscrição aprovada e a
+   * ficha preenchida (ver AlunaAcessoService).
    *
    * <p>O município é conferido antes de qualquer coisa ser criada: quem mora fora da área atendida
    * não vira cadastro pendente nem conta, só um registro estatístico da procura.
@@ -778,6 +780,9 @@ public class InscricaoController {
     // de espera e chamam alguém da lista quando abre vaga.
     Usuario atual = CurrentUser.require(Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
     FichaInscricao ficha = load(id);
+    // O núcleo entra antes do status: a vaga, a turma e a conta da aluna são resolvidos na aprovação
+    // e precisam enxergar o núcleo novo quando os dois vêm no mesmo pedido.
+    if (req.turma() != null && !req.turma().isBlank()) ficha.setTurma(req.turma());
     if (req.status() != null && !req.status().isBlank()) {
       StatusInscricao novoStatus = StatusInscricao.valueOf(req.status());
       if (novoStatus == StatusInscricao.APROVADA
@@ -799,7 +804,6 @@ public class InscricaoController {
       ficha.setDataPrimeiraAulaDefinidaEm(Instant.now());
     }
     if (req.motivoCancelamento() != null) ficha.setMotivoCancelamento(req.motivoCancelamento());
-    if (req.turma() != null && !req.turma().isBlank()) ficha.setTurma(req.turma());
     inscricoes.save(ficha);
     if (dataNova) avisarDataDaPrimeiraAula(ficha);
     return ficha;

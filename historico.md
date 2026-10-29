@@ -372,3 +372,27 @@ Cada registro deve informar:
 - Alterações: as listas de gênero e de orientação sexual passaram a ter exatamente a largura do campo. As descrições quebram linha dentro dela.
 - Regras de negócio e permissões afetadas: nenhuma.
 - Validação: medido no navegador com a lista aberta. No computador, lista e campo têm a mesma largura e nenhuma descrição fica cortada. No celular (375 px), a lista ocupa só a largura do campo, não sai da tela e os textos quebram em várias linhas. Verificação de tipos sem erros novos. O formulário foi preenchido com dados fictícios e não foi enviado.
+
+## 29/10/2026 — Correções de segurança e de regras de negócio do relatório de análise
+
+- Pedido: aplicar as correções do relatório técnico de 23/10/2026 (`docs/relatorio-analise-2026-10-23.md`).
+- Alterações:
+  - Upload: a extensão gravada passou a vir do tipo validado, não do nome enviado, e os primeiros bytes do arquivo precisam bater com o tipo declarado (JPEG, PNG, GIF, WEBP ou PDF). Arquivos são servidos com o tipo da lista e `nosniff`; extensões fora da lista saem só como download.
+  - Arquivos: `GET /api/files/{nome}` passou a conferir a quem o arquivo pertence (novo `FileAccessService`). Foto de perfil: qualquer pessoa logada. Documentos da ficha: a própria aluna, Assistente Social, Administrativo e Gestão. Fotos de evidência: gestão, quem registrou e quem atua na turma. Documentos do cadastro da equipe: Administrativo e Gestão. Sem permissão responde 404. `GET /api/confirmacoes/{id}/documentos` ganhou a mesma regra de acesso da ficha.
+  - Atendimentos: a lista deixou de ser acessível a alunas; o professor vê só os públicos dos núcleos em que atua (pelos vínculos de turma) e os que ele criou. O cadastro passou a validar o tipo de acesso e se a aluna é aprovada no núcleo informado.
+  - Usuários: ninguém altera o próprio núcleo pelo `PATCH /api/users/{id}` (só a Gestão Geral); o Administrativo não edita, ativa ou inativa contas da Gestão Geral; contas excluídas não podem ser reativadas.
+  - Exportação do núcleo: os campos da ficha que o Administrativo pode exportar viraram lista branca (`CAMPOS_FICHA_ADMINISTRATIVO`, no backend e no frontend). Saúde, renda, perfil socioeconômico, filhos, violência e textos livres ficam só com a Gestão Geral.
+  - Candidata não liberada (sem aprovação ou sem ficha de confirmação): mural, eventos e calendário voltam vazios e a inscrição em eventos é recusada (novo `AlunaAcessoService`). O núcleo da aluna no mural e no calendário passou a vir da inscrição aprovada, não do parâmetro da tela. A aluna só se inscreve em eventos gerais ou do próprio núcleo.
+  - `GET /api/nucleos` (lista completa, com endereço e telefone) restrito a Gestão, Administrativo e Assistente Social.
+  - Ficha de confirmação: o prazo foi para a configuração (`app.confirmacao.prazo`, variável `CONFIRMACAO_PRAZO`, padrão 31/12/2026 23:59 de Brasília) e o cancelamento por prazo expirado passou a ser gravado de fato (antes era desfeito pelo rollback da transação).
+  - Inscrição: ao aprovar e trocar o núcleo no mesmo pedido, o núcleo novo é aplicado antes da aprovação, então vaga, turma e conta da aluna usam o núcleo certo.
+  - Chamada: gravação numa transação só, `data_aula` validada (AAAA-MM-DD) e alerta recalculado em toda gravação. `GET /api/presencas` mostra ao professor só as turmas dele.
+  - Alertas de faltas: faltas já tratadas num alerta resolvido não voltam a contar; o alerta aberto também diminui quando uma falta é corrigida ou justificada.
+  - Eventos: a restrição de chamada do Monitor de Criança passou a usar os vínculos de turma.
+  - Calendário: datas validadas e sem repetição por núcleo.
+  - Erros: upload acima do limite responde 413 e violação de unicidade responde 409, em vez de 500.
+  - Turma e núcleo: o `id` deixou de ser aceito no JSON de criação (evitava sobrescrever um registro existente).
+  - Frontend: tipo `Atendimento` atualizado para o formato da API; removidos o `NovoAtendimentoDialog` (sem uso, no modelo antigo) e a página `professor/Alunos` (sem rota, ainda chamava o PocketBase).
+- Motivo: fechar a exposição de dados sensíveis (LGPD) e as regras que estavam só no frontend ou quebradas.
+- Validação: novo teste `SegurancaDadosIntegrationTest` (8 cenários: aluna sem acesso a atendimentos; documentos e arquivos só para a dona e a equipe; HTML declarado como PNG recusado; extensão gravada pelo tipo; professor não muda o próprio núcleo; Administrativo não inativa a Gestão nem reativa excluída; Administrativo não exporta saúde, filhos e violência; candidata não aprovada sem mural, eventos e lista de núcleos); suíte do backend com 38 testes e nenhuma falha; verificação de tipos do frontend sem erros (eram 23). As telas não foram abertas no navegador. O cancelamento por prazo expirado não tem teste automático, porque o prazo configurado ainda não venceu.
+- Pendente do relatório: leitura individual de notificações por perfil (F-20), perfil `prod` que recuse os padrões inseguros (F-10), token curto e revogação (F-11), rate limit e CAPTCHA nos cadastros públicos (F-22) e os itens de manutenção da seção 4.4.

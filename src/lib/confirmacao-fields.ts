@@ -88,6 +88,19 @@ export interface FormSection {
   fields: FormField[]
 }
 
+/**
+ * Campos da ficha que o Administrativo pode exportar nos dados do núcleo. Lista branca espelhada
+ * de `CAMPOS_FICHA_ADMINISTRATIVO` no RelatorioController: saúde, renda, perfil socioeconômico,
+ * filhos, violência e textos livres ficam só com a Gestão Geral.
+ */
+export const CAMPOS_FICHA_ADMINISTRATIVO = new Set([
+  'nome_completo', 'data_nascimento', 'cpf', 'rg', 'telefone', 'email', 'estado_civil',
+  'naturalidade', 'cep', 'endereco', 'numero', 'bairro', 'cidade', 'estado',
+  'situacao_trabalho', 'profissao', 'pessoas_residencia', 'escolaridade',
+  'contato_emergencia', 'turma', 'tamanho_camisa', 'tamanho_luva',
+  'compromisso_frequencia', 'veracidade_informacoes', 'termos_imagem', 'aceite_lgpd',
+])
+
 export const formSections: FormSection[] = [
   {
     id: 1,

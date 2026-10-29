@@ -16,4 +16,7 @@ public interface SolicitacaoRepository extends JpaRepository<Solicitacao, String
   List<Solicitacao> findBySolicitadoPorAndStatusOrderByCreatedDesc(String solicitadoPor, String status);
 
   List<Solicitacao> findByTipoNotAndStatusOrderByCreatedDesc(String tipo, String status);
+
+  /** Documentos do cadastro da equipe são referenciados dentro do JSON "dados". */
+  boolean existsByDadosContaining(String trecho);
 }

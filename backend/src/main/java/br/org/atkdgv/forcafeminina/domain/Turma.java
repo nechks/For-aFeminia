@@ -5,7 +5,8 @@ import java.time.Instant;
 import java.util.UUID;
 @Entity @Table(name="turmas")
 public class Turma {
- @Id @Column(length=36) private String id;
+ // Somente leitura no JSON: um id enviado no POST faria o save() sobrescrever outra turma.
+ @Id @Column(length=36) @JsonProperty(access = JsonProperty.Access.READ_ONLY) private String id;
  @JsonProperty("nucleo_id") @Column(nullable=false,length=36) private String nucleoId;
  @Column(nullable=false,unique=true,length=80) private String codigo;
  @Column(nullable=false) private String nome;

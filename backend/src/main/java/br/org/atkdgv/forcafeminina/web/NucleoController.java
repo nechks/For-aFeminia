@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.*;
 public class NucleoController {
   private final NucleoRepository nucleos; private final ProjetoRepository projetos; private final ProjetoProfissionalRepository profissionaisDoProjeto; private final UsuarioRepository usuarios; private final FichaInscricaoRepository inscricoes; private final TurmaRepository turmas; private final TurmaEquipeRepository equipe; private final ZonaPrioritariaRepository zonas; private final NucleoZonaPrioritariaRepository vinculosZona; private final PasswordEncoder encoder; private final br.org.atkdgv.forcafeminina.service.FuncaoNoNucleo funcaoNoNucleo;
   public NucleoController(NucleoRepository n, ProjetoRepository p, ProjetoProfissionalRepository pp, UsuarioRepository u, FichaInscricaoRepository i, TurmaRepository t, TurmaEquipeRepository te, ZonaPrioritariaRepository z, NucleoZonaPrioritariaRepository vz, PasswordEncoder e, br.org.atkdgv.forcafeminina.service.FuncaoNoNucleo f){nucleos=n;projetos=p;profissionaisDoProjeto=pp;usuarios=u;inscricoes=i;turmas=t;equipe=te;zonas=z;vinculosZona=vz;encoder=e;funcaoNoNucleo=f;}
+  /** Lista completa (endereço, telefone, capacidade, zonas) só para a gestão; o público usa /publicos. */
   @GetMapping public List<Nucleo> listar(){
+    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO, Perfil.ASSISTENTE_SOCIAL);
     List<Nucleo> lista=nucleos.findAllByOrderByNomeAsc();
     lista.forEach(this::carregarZonas);
     return lista;

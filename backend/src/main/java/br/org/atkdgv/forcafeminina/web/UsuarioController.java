@@ -162,14 +162,34 @@ public class UsuarioController {
   public Usuario updateJson(
       @PathVariable String id, @org.springframework.web.bind.annotation.RequestBody UpdateUserRequest req) {
     Usuario alvo = loadAndCheckPermission(id);
+    Usuario atual = CurrentUser.get();
     if (req.name() != null && !req.name().isBlank()) alvo.setName(req.name().trim());
     if (req.nomeSocial() != null) alvo.setNomeSocial(req.nomeSocial().trim());
-    if (req.turma() != null) alvo.setTurma(req.turma());
+    // O núcleo define o que a pessoa enxerga (chamada, atendimentos, mural): ninguém muda o próprio.
+    // Para alunas a transferência segue pelo PATCH /{id}/nucleo, que também atualiza a inscrição.
+    if (req.turma() != null && !req.turma().equals(alvo.getTurma())) {
+      if (atual.getPerfil() != Perfil.GESTAO_GERAL) {
+        throw new ApiException(
+            HttpStatus.FORBIDDEN, "forbidden", "Apenas a Gestão Geral pode alterar o núcleo.");
+      }
+      alvo.setTurma(req.turma());
+    }
     if (req.ativo() != null) {
-      Usuario atual = CurrentUser.get();
       if (atual.getPerfil() != Perfil.ADMINISTRATIVO && atual.getPerfil() != Perfil.GESTAO_GERAL) {
         throw new ApiException(
             HttpStatus.FORBIDDEN, "forbidden", "Apenas o administrativo pode ativar/inativar contas.");
+      }
+      if (alvo.getPerfil() == Perfil.GESTAO_GERAL && atual.getPerfil() != Perfil.GESTAO_GERAL) {
+        throw new ApiException(
+            HttpStatus.FORBIDDEN,
+            "forbidden",
+            "Apenas a Gestão Geral pode ativar ou inativar contas da Gestão Geral.");
+      }
+      if (req.ativo() && alvo.isExcluido()) {
+        throw new ApiException(
+            HttpStatus.CONFLICT,
+            "usuario_excluido",
+            "Esta conta foi excluída pela Gestão Geral e não pode ser reativada.");
       }
       alvo.setAtivo(req.ativo());
     }
@@ -270,9 +290,18 @@ public class UsuarioController {
       throw new ApiException(
           HttpStatus.FORBIDDEN, "forbidden", "Você só pode editar o próprio perfil.");
     }
-    return usuarios
-        .findById(id)
-        .orElseThrow(
-            () -> new ApiException(HttpStatus.NOT_FOUND, "not_found", "Usuário não encontrado."));
+    Usuario alvo =
+        usuarios
+            .findById(id)
+            .orElseThrow(
+                () ->
+                    new ApiException(HttpStatus.NOT_FOUND, "not_found", "Usuário não encontrado."));
+    if (alvo.getPerfil() == Perfil.GESTAO_GERAL
+        && atual.getPerfil() != Perfil.GESTAO_GERAL
+        && !atual.getId().equals(id)) {
+      throw new ApiException(
+          HttpStatus.FORBIDDEN, "forbidden", "Contas da Gestão Geral só são editadas pela Gestão.");
+    }
+    return alvo;
   }
 }

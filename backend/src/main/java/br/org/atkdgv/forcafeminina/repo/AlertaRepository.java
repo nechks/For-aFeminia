@@ -8,5 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AlertaRepository extends JpaRepository<Alerta, String> {
   Optional<Alerta> findByAlunaIdAndTipoAndStatus(String alunaId, String tipo, String status);
 
+  Optional<Alerta> findFirstByAlunaIdAndTipoAndStatusOrderByUpdatedDesc(
+      String alunaId, String tipo, String status);
+
   List<Alerta> findAllByOrderByCreatedDesc();
 }

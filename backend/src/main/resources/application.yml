@@ -26,6 +26,9 @@ app:
     secret: ${JWT_SECRET:forca-feminina-atkdgv-local-dev-secret-key-2026-sistemaforca}
     expiration-hours: ${JWT_EXPIRATION_HOURS:168}
   uploads-dir: ${UPLOADS_DIR:uploads}
+  confirmacao:
+    # Prazo final da ficha de confirmação da edição atual (data/hora com fuso de Brasília)
+    prazo: ${CONFIRMACAO_PRAZO:2026-12-31T23:59:59-03:00}
   cors:
     # Em produção defina CORS_ALLOWED_ORIGINS com os domínios reais, separados por vírgula
     allowed-origins: ${CORS_ALLOWED_ORIGINS:*}

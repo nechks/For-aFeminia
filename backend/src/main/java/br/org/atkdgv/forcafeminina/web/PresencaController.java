@@ -18,6 +18,8 @@ import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import br.org.atkdgv.forcafeminina.service.AlertaService;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -180,6 +183,7 @@ public class PresencaController {
       List<RegistroPresenca> registros) {}
 
   @PostMapping("/professor/presenca")
+  @Transactional
   public Map<String, Object> registrar(@RequestBody RegistrarRequest req) {
     Usuario atual =
         CurrentUser.require(
@@ -188,6 +192,12 @@ public class PresencaController {
     Turma turma = enforceTurma(atual, req.turmaId(), tipoChamada);
     if (req.dataAula() == null || req.dataAula().isBlank()) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "data_aula é obrigatório.");
+    }
+    try {
+      LocalDate.parse(req.dataAula());
+    } catch (DateTimeParseException e) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "data_invalida", "Informe a data da aula no formato AAAA-MM-DD.");
     }
     if (req.registros() == null || req.registros().isEmpty()) {
       throw new ApiException(
@@ -228,10 +238,9 @@ public class PresencaController {
       presencas.save(p);
       results.add(Map.of("user_id", reg.userId(), nova ? "created" : "updated", true));
 
-      // Falta sem justificativa pode disparar alerta para a Assistente Social (regra 6)
-      if (!reg.presente()) {
-        alertaService.verificarFaltasSemJustificativa(reg.userId());
-      }
+      // Falta sem justificativa pode disparar alerta para a Assistente Social (regra 6). Recalcula
+      // sempre: uma falta corrigida para presença ou justificada também muda o alerta aberto.
+      alertaService.verificarFaltasSemJustificativa(reg.userId());
     }
 
     return Map.of("success", true, "total", results.size(), "results", results);
@@ -243,10 +252,15 @@ public class PresencaController {
     return presencas.findByUserIdOrderByDataAulaDesc(atual.getId());
   }
 
+  /** Gestão vê todas as presenças; o(a) professor(a), só as das turmas em que tem vínculo ativo. */
   @GetMapping("/presencas")
   public List<Presenca> listAll() {
-    CurrentUser.require(Perfil.PROFESSOR, Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
-    return presencas.findAllByOrderByDataAulaDesc();
+    Usuario atual = CurrentUser.require(Perfil.PROFESSOR, Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
+    List<Presenca> todas = presencas.findAllByOrderByDataAulaDesc();
+    if (atual.getPerfil() != Perfil.PROFESSOR) return todas;
+    Set<String> minhasTurmas = new HashSet<>();
+    equipe.findByUserIdAndAtivoTrue(atual.getId()).forEach(v -> minhasTurmas.add(v.getTurmaId()));
+    return todas.stream().filter(p -> minhasTurmas.contains(p.getTurmaId())).toList();
   }
 
   /**

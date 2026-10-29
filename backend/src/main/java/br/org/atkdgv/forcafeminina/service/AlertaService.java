@@ -6,6 +6,7 @@ import br.org.atkdgv.forcafeminina.repo.AlertaRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
 import br.org.atkdgv.forcafeminina.repo.PresencaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -39,14 +40,20 @@ public class AlertaService {
   public void verificarFaltasSemJustificativa(String alunaId) {
     // Qualquer falta sem justificativa já abre o alerta (LIMITE_FALTAS = 0), inclusive quando a
     // aluna perde só uma das duas chamadas do dia — que vale 0,5. As duas somam uma falta completa.
+    // Faltas já tratadas num alerta resolvido não voltam a contar: só entram as registradas ou
+    // alteradas depois da última resolução.
+    Instant corte =
+        alertas
+            .findFirstByAlunaIdAndTipoAndStatusOrderByUpdatedDesc(alunaId, TIPO_FALTAS, "RESOLVIDO")
+            .map(Alerta::getUpdated)
+            .orElse(null);
     List<Presenca> registros =
         presencas.findByUserIdOrderByDataAulaDesc(alunaId).stream()
             .filter(p -> !p.isPresente())
             .filter(p -> !p.isJustificada())
+            .filter(p -> corte == null || (p.getUpdated() != null && p.getUpdated().isAfter(corte)))
             .toList();
     double faltas = registros.size() * 0.5;
-
-    if (faltas <= LIMITE_FALTAS) return;
 
     String datas =
         registros.stream().map(Presenca::getDataAula).distinct().sorted().collect(Collectors.joining(","));
@@ -54,11 +61,14 @@ public class AlertaService {
     Alerta aberto =
         alertas.findByAlunaIdAndTipoAndStatus(alunaId, TIPO_FALTAS, "ABERTO").orElse(null);
     if (aberto != null) {
+      // Atualiza também para baixo: uma falta corrigida ou justificada sai da contagem.
       aberto.setFaltasSemJustificativa(faltas);
       aberto.setDatas(datas);
       alertas.save(aberto);
       return;
     }
+
+    if (faltas <= LIMITE_FALTAS) return;
 
     Alerta alerta = new Alerta();
     alerta.setAlunaId(alunaId);

@@ -24,9 +24,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -47,8 +49,11 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api")
 public class ConfirmacaoController {
 
-  /** Prazo final da edição IV — depois disso a vaga é cancelada automaticamente. */
-  private static final Instant DEADLINE = Instant.parse("2026-12-31T23:59:59Z");
+  /**
+   * Prazo final da edição (app.confirmacao.prazo) — depois disso a vaga é cancelada
+   * automaticamente. Fica na configuração para cada edição ajustar sem mudar o código.
+   */
+  private final Instant prazo;
 
   private static final Locale BRASIL = Locale.of("pt", "BR");
 
@@ -76,7 +81,9 @@ public class ConfirmacaoController {
       CicloService ciclos,
       NotificacaoService notificacoes,
       NucleoRepository nucleos,
-      ProjetoRepository projetos) {
+      ProjetoRepository projetos,
+      @Value("${app.confirmacao.prazo}") String prazo) {
+    this.prazo = OffsetDateTime.parse(prazo).toInstant();
     this.confirmacoes = confirmacoes;
     this.inscricoes = inscricoes;
     this.documentos = documentos;
@@ -88,8 +95,21 @@ public class ConfirmacaoController {
     this.projetos = projetos;
   }
 
+  /**
+   * Prazo expirado: o cancelamento da inscrição precisa ser gravado mesmo com o erro devolvido à
+   * aluna, por isso esta exceção não desfaz a transação.
+   */
+  static class PrazoExpiradoException extends ApiException {
+    PrazoExpiradoException() {
+      super(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "deadline_expired",
+          "O prazo para preenchimento da ficha expirou.");
+    }
+  }
+
   @PostMapping(value = "/confirmacao", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @Transactional
+  @Transactional(noRollbackFor = PrazoExpiradoException.class)
   public ResponseEntity<FichaConfirmacao> submit(
       @RequestParam Map<String, String> params,
       @RequestPart(value = "foto_rg", required = false) MultipartFile fotoRg,
@@ -122,14 +142,11 @@ public class ConfirmacaoController {
           "Sua inscrição não está aprovada para preencher a ficha.");
     }
 
-    if (Instant.now().isAfter(DEADLINE)) {
+    if (Instant.now().isAfter(prazo)) {
       inscricao.setStatus(StatusInscricao.CANCELADA);
       inscricao.setMotivoCancelamento("Prazo da ficha de confirmação expirado");
       inscricoes.save(inscricao);
-      throw new ApiException(
-          HttpStatus.UNPROCESSABLE_ENTITY,
-          "deadline_expired",
-          "O prazo para preenchimento da ficha expirou.");
+      throw new PrazoExpiradoException();
     }
 
     String aceite = params.get("aceite_lgpd");
@@ -202,8 +219,20 @@ public class ConfirmacaoController {
 
   @GetMapping("/confirmacoes/{id}")
   public FichaConfirmacao getOne(@PathVariable String id) {
-    Usuario atual = CurrentUser.get();
     FichaConfirmacao conf = load(id);
+    exigirAcesso(conf);
+    return conf;
+  }
+
+  /** Documentos pessoais (RG, CPF, foto): mesma regra de acesso da ficha. */
+  @GetMapping("/confirmacoes/{id}/documentos")
+  public List<DocumentoAnexo> docs(@PathVariable String id) {
+    exigirAcesso(load(id));
+    return documentos.findByConfirmacaoId(id);
+  }
+
+  private void exigirAcesso(FichaConfirmacao conf) {
+    Usuario atual = CurrentUser.get();
     boolean podeVer =
         atual.getId().equals(conf.getUserId())
             || atual.getPerfil() == Perfil.ADMINISTRATIVO
@@ -212,13 +241,6 @@ public class ConfirmacaoController {
     if (!podeVer) {
       throw new ApiException(HttpStatus.FORBIDDEN, "forbidden", "Acesso negado.");
     }
-    return conf;
-  }
-
-  @GetMapping("/confirmacoes/{id}/documentos")
-  public List<DocumentoAnexo> docs(@PathVariable String id) {
-    CurrentUser.get();
-    return documentos.findByConfirmacaoId(id);
   }
 
   public record SecaoUpdateRequest(String secao, Map<String, Object> dados) {}

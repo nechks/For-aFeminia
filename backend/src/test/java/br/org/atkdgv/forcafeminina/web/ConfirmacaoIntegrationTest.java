@@ -88,7 +88,9 @@ class ConfirmacaoIntegrationTest {
   }
 
   private MockMultipartFile arquivo(String campo, String nome) {
-    return new MockMultipartFile(campo, nome, MediaType.IMAGE_PNG_VALUE, new byte[] {1, 2, 3});
+    // Assinatura PNG real: o upload confere os primeiros bytes contra o tipo declarado.
+    byte[] png = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n', 0, 0, 0, 0};
+    return new MockMultipartFile(campo, nome, MediaType.IMAGE_PNG_VALUE, png);
   }
 
   private String entrar(Usuario usuario) throws Exception {

@@ -2,7 +2,9 @@ package br.org.atkdgv.forcafeminina.web;
 
 import br.org.atkdgv.forcafeminina.domain.Mural;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
+import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.MuralRepository;
+import br.org.atkdgv.forcafeminina.service.AlunaAcessoService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MuralController {
 
   private final MuralRepository mural;
+  private final AlunaAcessoService acessoAluna;
 
-  public MuralController(MuralRepository mural) {
+  public MuralController(MuralRepository mural, AlunaAcessoService acessoAluna) {
     this.mural = mural;
+    this.acessoAluna = acessoAluna;
   }
 
   /**
@@ -34,8 +38,13 @@ public class MuralController {
    */
   @GetMapping("/mural")
   public List<Mural> list(@RequestParam(required = false) String turma) {
-    if (CurrentUser.get().getPerfil() == Perfil.ALUNA_FF) {
-      return mural.findAtivosParaTurma(LocalDate.now().toString(), turma == null ? "" : turma);
+    Usuario atual = CurrentUser.get();
+    if (atual.getPerfil() == Perfil.ALUNA_FF) {
+      // O núcleo vem da inscrição aprovada, nunca do parâmetro: a aluna só vê os avisos dela.
+      return acessoAluna
+          .nucleoDaAlunaLiberada(atual)
+          .map(nucleo -> mural.findAtivosParaTurma(LocalDate.now().toString(), nucleo))
+          .orElse(List.of());
     }
     if (turma == null || turma.isBlank()) {
       return mural.findAllByOrderByDataPublicacaoDesc();

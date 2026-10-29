@@ -173,22 +173,24 @@ export interface CalendarioAula {
   updated: string
 }
 
-export type AtendimentoTipo = 'INDIVIDUAL' | 'GRUPAL' | 'FAMILIAR' | 'ENCAMINHAMENTO'
+export type TipoAcessoAtendimento = 'PUBLICO' | 'CONFIDENCIAL'
 
+/** Formato devolvido por GET /api/atendimentos e pelos relatórios. */
 export interface Atendimento {
   id: string
+  created_by: string
   aluna_id: string
-  profissional_id: string
+  data: string
+  horario: string
+  tipo_acesso: TipoAcessoAtendimento
+  /** Nulo nos confidenciais listados para a Gestão: o texto só sai com a autorização do autor. */
+  relatorio: string | null
   turma: string
-  data_atendimento: string
-  tipo: AtendimentoTipo
-  descricao: string
-  encaminhamento?: string
   created: string
   updated: string
   expand?: {
+    created_by?: Usuario
     aluna_id?: Usuario
-    profissional_id?: Usuario
   }
 }
 

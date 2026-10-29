@@ -2,6 +2,7 @@ package br.org.atkdgv.forcafeminina.web;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -36,6 +38,30 @@ public class ApiExceptionHandler {
 
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ApiExceptionHandler.class);
+
+  /** Arquivo acima do limite de upload (5 MB por arquivo, 25 MB por envio). */
+  @ExceptionHandler(MaxUploadSizeExceededException.class)
+  public ResponseEntity<Map<String, Object>> handleUploadGrande(MaxUploadSizeExceededException ex) {
+    return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+        .body(
+            Map.of(
+                "error", "arquivo_muito_grande",
+                "message", "Arquivo muito grande. Envie arquivos de até 5 MB."));
+  }
+
+  /**
+   * Violação de unicidade no banco — normalmente dois envios simultâneos do mesmo cadastro
+   * (e-mail, presença, inscrição em evento) que passaram juntos pela checagem da aplicação.
+   */
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<Map<String, Object>> handleConflito(DataIntegrityViolationException ex) {
+    log.warn("Violação de integridade: {}", ex.getMostSpecificCause().getMessage());
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(
+            Map.of(
+                "error", "conflito",
+                "message", "Este registro já existe ou foi alterado ao mesmo tempo. Atualize a página e tente novamente."));
+  }
 
   /**
    * Erros de requisição que o próprio Spring já classifica (endereço inexistente, parâmetro

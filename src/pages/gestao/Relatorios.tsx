@@ -63,7 +63,7 @@ import {
 } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 import { useApp } from '@/store/app-context'
-import { formSections } from '@/lib/confirmacao-fields'
+import { CAMPOS_FICHA_ADMINISTRATIVO, formSections } from '@/lib/confirmacao-fields'
 
 const formatarData = (iso?: string | null) =>
   iso ? new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR') : '—'
@@ -895,6 +895,10 @@ function DadosNucleoTab() {
           // mesmo valor. Fica o do cadastro, que existe para toda aluna aprovada mesmo quando a
           // ficha ainda não foi entregue.
           .filter((campo) => !CHAVES_DO_CADASTRO.has(campo.name))
+          .filter(
+            (campo) =>
+              user?.perfil === 'GESTAO_GERAL' || CAMPOS_FICHA_ADMINISTRATIVO.has(campo.name),
+          )
           .map((campo) => ({
             chave: `confirmacao.${campo.name}`,
             rotulo: campo.label,

@@ -6,12 +6,16 @@ import br.org.atkdgv.forcafeminina.domain.EventoPergunta;
 import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
 import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
+import br.org.atkdgv.forcafeminina.domain.TipoProfissional;
+import br.org.atkdgv.forcafeminina.domain.TurmaEquipe;
 import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.EventoInscricaoRepository;
 import br.org.atkdgv.forcafeminina.repo.EventoPerguntaRepository;
 import br.org.atkdgv.forcafeminina.repo.EventoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaEquipeRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
+import br.org.atkdgv.forcafeminina.service.AlunaAcessoService;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,6 +54,8 @@ public class EventoController {
   private final FichaInscricaoRepository fichas;
   private final UsuarioRepository usuarios;
   private final ObjectMapper objectMapper;
+  private final AlunaAcessoService acessoAluna;
+  private final TurmaEquipeRepository equipe;
 
   public EventoController(
       EventoRepository eventos,
@@ -57,13 +63,17 @@ public class EventoController {
       EventoInscricaoRepository inscricoesEvento,
       FichaInscricaoRepository fichas,
       UsuarioRepository usuarios,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      AlunaAcessoService acessoAluna,
+      TurmaEquipeRepository equipe) {
     this.eventos = eventos;
     this.perguntas = perguntas;
     this.inscricoesEvento = inscricoesEvento;
     this.fichas = fichas;
     this.usuarios = usuarios;
     this.objectMapper = objectMapper;
+    this.acessoAluna = acessoAluna;
+    this.equipe = equipe;
   }
 
   public record PerguntaRequest(String pergunta, List<String> opcoes) {}
@@ -170,12 +180,12 @@ public class EventoController {
 
     List<Evento> lista;
     if (atual.getPerfil() == Perfil.ALUNA_FF) {
-      String turma =
-          fichas
-              .findFirstByUserIdAndStatus(atual.getId(), StatusInscricao.APROVADA)
-              .map(f -> f.getTurma() == null ? "" : f.getTurma())
-              .orElse("");
-      lista = eventos.findAtivosParaTurma(hoje, turma);
+      // Candidata ainda não liberada (sem aprovação ou sem ficha) não vê eventos.
+      lista =
+          acessoAluna
+              .nucleoDaAlunaLiberada(atual)
+              .map(turma -> eventos.findAtivosParaTurma(hoje, turma))
+              .orElse(List.of());
     } else {
       lista = eventos.findAllByOrderByDataEventoDesc();
       if (atual.getPerfil() == Perfil.PROFESSOR) {
@@ -221,6 +231,21 @@ public class EventoController {
       @PathVariable String id, @RequestBody InscreverRequest req) {
     Usuario atual = CurrentUser.require(Perfil.ALUNA_FF);
     Evento evento = load(id);
+
+    String nucleo =
+        acessoAluna
+            .nucleoDaAlunaLiberada(atual)
+            .orElseThrow(
+                () ->
+                    new ApiException(
+                        HttpStatus.FORBIDDEN,
+                        "aluna_nao_liberada",
+                        "A inscrição em eventos é liberada após a aprovação e a ficha de confirmação."));
+    // Evento sem núcleo é geral; com núcleo, só para as alunas daquele núcleo.
+    if (evento.getTurma() != null && !evento.getTurma().isBlank() && !evento.getTurma().equals(nucleo)) {
+      throw new ApiException(
+          HttpStatus.FORBIDDEN, "evento_outro_nucleo", "Este evento é de outro núcleo.");
+    }
 
     if (evento.getDataEvento().compareTo(LocalDate.now().toString()) < 0) {
       throw new ApiException(
@@ -292,8 +317,7 @@ public class EventoController {
     Evento evento = load(id);
     requireAcessoEvento(evento);
     Usuario atual = CurrentUser.get();
-    if (atual.getPerfil() == Perfil.PROFESSOR
-        && "MONITOR_CRIANCA".equals(atual.getTipoProfissional())) {
+    if (atual.getPerfil() == Perfil.PROFESSOR && somenteMonitorDeCrianca(atual)) {
       throw new ApiException(
           HttpStatus.FORBIDDEN,
           "chamada_nao_permitida",
@@ -474,6 +498,20 @@ public class EventoController {
 
   private List<Map<String, String>> nomesResponsaveis(String json) {
     return idsResponsaveis(json).stream().map(id -> usuarios.findById(id).map(u -> Map.of("id", u.getId(), "nome", u.getName())).orElse(null)).filter(java.util.Objects::nonNull).toList();
+  }
+
+  /**
+   * Monitor de Criança não faz chamada. A função vem dos vínculos ativos com turmas (a mesma pessoa
+   * pode ter funções diferentes em turmas diferentes); o campo legado só vale para quem não tem
+   * vínculo.
+   */
+  private boolean somenteMonitorDeCrianca(Usuario atual) {
+    List<TurmaEquipe> vinculos = equipe.findByUserIdAndAtivoTrue(atual.getId());
+    if (vinculos.isEmpty()) {
+      return TipoProfissional.MONITOR_CRIANCA.equals(atual.getTipoProfissional());
+    }
+    return vinculos.stream()
+        .allMatch(v -> TipoProfissional.MONITOR_CRIANCA.equals(v.getTipoProfissional()));
   }
 
   private void requireAcessoEvento(Evento evento) {

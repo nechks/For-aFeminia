@@ -67,10 +67,18 @@ public class RelatorioController {
       Map.entry("cidade", "Cidade"), Map.entry("estado", "Estado"),
       Map.entry("cep", "CEP"), Map.entry("nucleo", "Núcleo"),
       Map.entry("faltas", "Número de faltas"));
-  private static final Set<String> CAMPOS_CONFIDENCIAIS = Set.of(
-      "tipo_moradia", "situacao_moradia", "possui_agua", "possui_luz", "possui_esgoto",
-      "bens_familia", "programas_sociais", "situacao_violencia", "tipo_violencia", "denuncio",
-      "apoio_familiar", "observacoes");
+  /**
+   * Campos da ficha de confirmação que o Administrativo pode exportar. É uma lista branca: saúde,
+   * renda, perfil socioeconômico, filhos, violência e textos livres ficam só com a Gestão Geral, e
+   * campos novos da ficha nascem restritos até serem incluídos aqui (espelhada em
+   * {@code CAMPOS_FICHA_ADMINISTRATIVO} no frontend).
+   */
+  private static final Set<String> CAMPOS_FICHA_ADMINISTRATIVO = Set.of(
+      "nome_completo", "data_nascimento", "cpf", "rg", "telefone", "email", "estado_civil",
+      "naturalidade", "cep", "endereco", "numero", "bairro", "cidade", "estado",
+      "situacao_trabalho", "profissao", "pessoas_residencia", "escolaridade",
+      "contato_emergencia", "turma", "tamanho_camisa", "tamanho_luva",
+      "compromisso_frequencia", "veracidade_informacoes", "termos_imagem", "aceite_lgpd");
 
   private final AtendimentoRepository atendimentos;
   private final UsuarioRepository usuarios;
@@ -266,7 +274,10 @@ public class RelatorioController {
     if (campos.stream().anyMatch(c -> !CAMPOS_NUCLEO.containsKey(c) && !c.startsWith("confirmacao.")))
       throw new ApiException(HttpStatus.BAD_REQUEST, "campo_invalido", "Um dos dados selecionados é inválido.");
     if (CurrentUser.get().getPerfil() != Perfil.GESTAO_GERAL
-        && campos.stream().map(c -> c.replace("confirmacao.", "")).anyMatch(CAMPOS_CONFIDENCIAIS::contains))
+        && campos.stream()
+            .filter(c -> c.startsWith("confirmacao."))
+            .map(c -> c.substring("confirmacao.".length()))
+            .anyMatch(c -> !CAMPOS_FICHA_ADMINISTRATIVO.contains(c)))
       throw new ApiException(HttpStatus.FORBIDDEN, "campo_confidencial", "Dados confidenciais são exclusivos da Gestão Geral.");
   }
 
