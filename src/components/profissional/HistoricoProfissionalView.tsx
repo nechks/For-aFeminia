@@ -48,7 +48,7 @@ export default function HistoricoProfissionalView({ historico, gestao = false }:
         </Card>
         <Card>
           <CardHeader><CardTitle className="text-sm font-medium">Registros de aula</CardTitle></CardHeader>
-          <CardContent><p className="text-3xl font-bold">{assiduidade.registros_aula}</p><p className="text-xs text-muted-foreground">Evidências e feedbacks enviados</p></CardContent>
+          <CardContent><p className="text-3xl font-bold">{assiduidade.registros_aula}</p><p className="text-xs text-muted-foreground">Evidências de aula enviadas</p></CardContent>
         </Card>
       </div>
 

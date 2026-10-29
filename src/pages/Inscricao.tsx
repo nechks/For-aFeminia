@@ -56,12 +56,34 @@ const GENEROS = [
 ]
 /** Resumo de cada identidade. Fica dentro da opção, no lugar do bloco de texto acima do campo. */
 const GENERO_RESUMO: Record<string, string> = {
-  'Mulher Cisgênero': 'Identifica-se com o gênero atribuído no nascimento.',
-  'Mulher Transgênero': 'Não se identifica com o gênero atribuído no nascimento; vive como mulher.',
+  'Mulher Cisgênero':
+    'Identifica-se como mulher e com o gênero correspondente ao sexo que lhe foi atribuído no nascimento.',
+  'Mulher Transgênero':
+    'Identifica-se como mulher, embora o sexo que lhe foi atribuído no nascimento tenha sido diferente do feminino.',
   'Não Binária (feminizadas/lidas como femininas)':
-    'Não se identifica exclusivamente como homem ou mulher.',
+    'Não se identifica exclusivamente como homem ou mulher e possui identificação relacionada ao feminino.',
 }
-const ORIENTACOES = ['Heterossexual', 'Homossexual', 'Bissexual', 'Assexual', 'Pansexual']
+const ORIENTACAO_OUTRA = 'Outra orientação sexual'
+const ORIENTACOES = [
+  'Heterossexual',
+  'Lésbica',
+  'Bissexual',
+  'Pansexual',
+  'Assexual',
+  ORIENTACAO_OUTRA,
+]
+const ORIENTACAO_RESUMO: Record<string, string> = {
+  Heterossexual:
+    'Sente atração afetiva e/ou sexual predominantemente por pessoas de gênero diferente do seu.',
+  Lésbica:
+    'Mulher ou pessoa com identificação no campo do feminino que sente atração afetiva e/ou sexual por mulheres.',
+  Bissexual: 'Sente atração afetiva e/ou sexual por mais de um gênero.',
+  Pansexual: 'Sente atração afetiva e/ou sexual por pessoas independentemente do gênero.',
+  Assexual:
+    'Sente pouca ou nenhuma atração sexual; isso não impede vínculos afetivos ou românticos.',
+  [ORIENTACAO_OUTRA]:
+    'Não se reconhece nas opções anteriores e pode informar livremente como se identifica.',
+}
 const CORES_RACAS = ['Amarela', 'Preta', 'Indígena', 'Branca', 'Parda']
 const DEFICIENCIAS = [
   'Motora/Física',
@@ -135,6 +157,7 @@ const fieldStep: Record<string, number> = {
   zona_residencia: 2,
   genero: 3,
   orientacao_sexual: 3,
+  orientacao_sexual_outro: 3,
   cor_raca: 3,
   pcd: 3,
   tipos_deficiencia: 3,
@@ -204,6 +227,7 @@ const formSchema = z
     zona_residencia: z.string().min(1, 'Informe se mora em zona urbana ou rural'),
     genero: z.string().min(1, 'Selecione como você se identifica'),
     orientacao_sexual: z.string().min(1, 'Selecione sua orientação sexual'),
+    orientacao_sexual_outro: z.string(),
     cor_raca: z.string().min(1, 'Selecione sua cor ou raça/etnia'),
     pcd: z.string().min(1, 'Informe se é pessoa com deficiência'),
     tipos_deficiencia: z.array(z.string()),
@@ -243,6 +267,12 @@ const formSchema = z
     message: 'As senhas não conferem',
     path: ['confirmar_senha'],
   })
+  .refine(
+    (data) =>
+      data.orientacao_sexual !== ORIENTACAO_OUTRA ||
+      data.orientacao_sexual_outro.trim().length > 0,
+    { message: 'Descreva como você se identifica', path: ['orientacao_sexual_outro'] },
+  )
   .refine((data) => data.pcd !== 'Sim' || data.tipos_deficiencia.length > 0, {
     message: 'Selecione o(s) tipo(s) de deficiência',
     path: ['tipos_deficiencia'],
@@ -363,6 +393,7 @@ export default function Inscricao() {
       zona_residencia: '',
       genero: '',
       orientacao_sexual: '',
+      orientacao_sexual_outro: '',
       cor_raca: '',
       pcd: '',
       tipos_deficiencia: [],
@@ -503,6 +534,7 @@ export default function Inscricao() {
       3: [
         'genero',
         'orientacao_sexual',
+        'orientacao_sexual_outro',
         'cor_raca',
         'pcd',
         'tipos_deficiencia',
@@ -864,7 +896,8 @@ export default function Inscricao() {
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="max-w-[min(28rem,90vw)]">
+                          {/* Mesma largura do campo: as descrições quebram linha dentro dela, sem cortar nem sair da tela. */}
+                          <SelectContent className="w-[var(--radix-select-trigger-width)]">
                             {GENEROS.map((o) => (
                               <SelectItem key={o} value={o} textValue={o}>
                                 <span className="font-medium">{o}</span>
@@ -888,16 +921,29 @@ export default function Inscricao() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Qual sua orientação sexual?</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            field.onChange(v)
+                            if (v !== ORIENTACAO_OUTRA) form.setValue('orientacao_sexual_outro', '')
+                          }}
+                        >
                           <FormControl>
-                            <SelectTrigger className="h-11">
+                            <SelectTrigger className="h-11 [&_[data-desc]]:hidden">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          {/* Mesma largura do campo: as descrições quebram linha dentro dela, sem cortar nem sair da tela. */}
+                          <SelectContent className="w-[var(--radix-select-trigger-width)]">
                             {ORIENTACOES.map((o) => (
-                              <SelectItem key={o} value={o}>
-                                {o}
+                              <SelectItem key={o} value={o} textValue={o}>
+                                <span className="font-medium">{o}</span>
+                                <span
+                                  data-desc
+                                  className="mt-0.5 block whitespace-normal text-xs text-muted-foreground"
+                                >
+                                  {ORIENTACAO_RESUMO[o]}
+                                </span>
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -906,6 +952,25 @@ export default function Inscricao() {
                       </FormItem>
                     )}
                   />
+                  {form.watch('orientacao_sexual') === ORIENTACAO_OUTRA && (
+                    <FormField
+                      control={form.control}
+                      name="orientacao_sexual_outro"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Como você se identifica?</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Descreva sua orientação sexual"
+                              {...field}
+                              className="h-11"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <FormField
                     control={form.control}
                     name="cor_raca"

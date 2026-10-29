@@ -7,7 +7,7 @@ import {
   type CriarAtendimentoData,
 } from '@/services/atendimentos'
 import { getCalendarioByTurma } from '@/services/calendario'
-import { turmaLabels, tipoAtendimentoLabels } from '@/lib/constants'
+import { turmaLabels, nucleosCadastrados, tipoAtendimentoLabels } from '@/lib/constants'
 import type { CalendarioAula } from '@/lib/types'
 import {
   Dialog,
@@ -160,9 +160,9 @@ export function NovoAtendimentoDialog({
                 <SelectValue placeholder="Selecione o núcleo..." />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(turmaLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>

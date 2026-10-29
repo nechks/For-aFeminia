@@ -9,7 +9,7 @@ import {
   deletarAtendimento,
   AlunaOpcao,
 } from '@/services/atendimentos'
-import { turmaLabels } from '@/lib/constants'
+import { turmaLabels, nucleosCadastrados } from '@/lib/constants'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -228,8 +228,8 @@ function NovoAtendimentoDialog({
                   <SelectValue placeholder="Selecione a turma..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(turmaLabels).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  {nucleosCadastrados.map(({ codigo, nome }) => (
+                    <SelectItem key={codigo} value={codigo}>{nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -334,8 +334,9 @@ export default function Atendimentos() {
 
   const podeCriar = user && PODE_CRIAR.includes(user.perfil)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  /** `silencioso`: a recarga automática não troca a lista por um spinner (evita o piscar). */
+  const load = useCallback(async (silencioso = false) => {
+    if (!silencioso) setLoading(true)
     try {
       const data = await getAtendimentos()
       setLista(data)
@@ -348,7 +349,7 @@ export default function Atendimentos() {
 
   useEffect(() => { load() }, [load])
 
-  useRealtime('atendimentos', () => { load() }, isAuthenticated)
+  useRealtime('atendimentos', () => { load(true) }, isAuthenticated)
 
   const handleDeletar = async () => {
     if (!deletarId) return

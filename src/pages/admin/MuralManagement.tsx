@@ -4,7 +4,7 @@ import { getMural, createMural, deleteMural } from '@/services/mural'
 import { criarEvento, NovaPergunta } from '@/services/eventos'
 import { Mural, Usuario } from '@/lib/types'
 import api from '@/lib/api/client'
-import { turmaLabels } from '@/lib/constants'
+import { turmaLabels, nucleosCadastrados } from '@/lib/constants'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -213,9 +213,9 @@ export default function MuralManagement() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Geral (todas as turmas)</SelectItem>
-                  {Object.entries(turmaLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
+                  {nucleosCadastrados.map(({ codigo, nome }) => (
+                    <SelectItem key={codigo} value={codigo}>
+                      {nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -297,9 +297,9 @@ export default function MuralManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Geral (todas as turmas)</SelectItem>
-                {Object.entries(turmaLabels).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getCalendarioByTurma } from '@/services/calendario'
 import { getDashboardForcaFeminina } from '@/services/dashboard'
 import { CalendarioAula } from '@/lib/types'
-import { turmaLabels } from '@/lib/constants'
+import { formatarNucleo } from '@/lib/constants'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Calendar as CalendarIcon, Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -22,7 +22,22 @@ export default function Calendario() {
       setTurma(dash.turma)
       if (dash.turma) {
         const data = await getCalendarioByTurma(dash.turma)
-        setAulas(data as unknown as CalendarioAula[])
+        const aulasSalvas = data as unknown as CalendarioAula[]
+        const primeiraAula = dash.dataPrimeiraAula
+        setAulas(
+          primeiraAula && !aulasSalvas.some((aula) => aula.data_aula === primeiraAula)
+            ? [
+                ...aulasSalvas,
+                {
+                  id: `primeira-aula-${primeiraAula}`,
+                  turma: dash.turma,
+                  data_aula: primeiraAula,
+                  created: '',
+                  updated: '',
+                },
+              ].sort((a, b) => a.data_aula.localeCompare(b.data_aula))
+            : aulasSalvas,
+        )
       }
     } catch (err) {
       console.error('Failed to load calendario:', err)
@@ -35,6 +50,7 @@ export default function Calendario() {
     loadCalendario()
   }, [loadCalendario])
 
+  // Um único ciclo: dois hooks chamando o mesmo `loadCalendario` duplicavam as requisições.
   useRealtime('calendario_aula', () => {
     loadCalendario()
   })
@@ -52,7 +68,7 @@ export default function Calendario() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Calendário de Aulas</h1>
         <p className="text-muted-foreground mt-1">
-          {turma ? `Turma: ${turmaLabels[turma] ?? turma}` : 'Nenhuma turma atribuída'}
+          {turma ? `Turma: ${formatarNucleo(turma)}` : 'Nenhuma turma atribuída'}
         </p>
       </div>
 
@@ -69,7 +85,7 @@ export default function Calendario() {
           ) : (
             <div className="space-y-3">
               {aulas.map((aula) => {
-                const dataObj = aula.data_aula ? new Date(aula.data_aula) : null
+                const dataObj = aula.data_aula ? new Date(`${aula.data_aula}T12:00:00`) : null
                 const isPast = dataObj ? dataObj < new Date() : false
                 return (
                   <div
@@ -91,7 +107,7 @@ export default function Calendario() {
                           : aula.data_aula}
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {turmaLabels[aula.turma] ?? aula.turma}
+                        {formatarNucleo(aula.turma)}
                       </div>
                     </div>
                     {isPast ? (

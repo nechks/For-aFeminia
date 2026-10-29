@@ -18,6 +18,7 @@ import br.org.atkdgv.forcafeminina.repo.InteresseNaoAtendidoRepository;
 import br.org.atkdgv.forcafeminina.repo.MunicipioAtendidoRepository;
 import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.ProjetoRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import br.org.atkdgv.forcafeminina.repo.ZonaPrioritariaRepository;
 import br.org.atkdgv.forcafeminina.service.NotificacaoService;
@@ -38,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -63,6 +65,13 @@ public class InscricaoController {
   public static final String VAGA_CRIANCA_APROVADA = "APROVADA";
   public static final String VAGA_CRIANCA_NAO_APROVADA = "NAO_APROVADA";
 
+  /**
+   * Situações que ainda esperam uma decisão da gestão. A lista de espera fica de fora: quem já foi
+   * para a fila será chamada quando abrir vaga e tem aba própria para isso.
+   */
+  private static final Set<StatusInscricao> PENDENTES_DE_ANALISE =
+      Set.of(StatusInscricao.AGUARDANDO, StatusInscricao.EM_ANALISE);
+
   private static final DateTimeFormatter DATA_BR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
   private final FichaInscricaoRepository inscricoes;
@@ -73,6 +82,7 @@ public class InscricaoController {
   private final NucleoRepository nucleos;
   private final ZonaPrioritariaRepository zonasPrioritarias;
   private final ProjetoRepository projetos;
+  private final TurmaRepository turmas;
   private final FichaConfirmacaoRepository confirmacoes;
   private final NotificacaoService notificacoes;
   private final ObjectMapper objectMapper;
@@ -86,6 +96,7 @@ public class InscricaoController {
       NucleoRepository nucleos,
       ZonaPrioritariaRepository zonasPrioritarias,
       ProjetoRepository projetos,
+      TurmaRepository turmas,
       FichaConfirmacaoRepository confirmacoes,
       NotificacaoService notificacoes,
       ObjectMapper objectMapper) {
@@ -97,6 +108,7 @@ public class InscricaoController {
     this.nucleos = nucleos;
     this.zonasPrioritarias = zonasPrioritarias;
     this.projetos = projetos;
+    this.turmas = turmas;
     this.confirmacoes = confirmacoes;
     this.notificacoes = notificacoes;
     this.objectMapper = objectMapper;
@@ -131,6 +143,7 @@ public class InscricaoController {
       @JsonProperty("crianca_medicamento_qual") String criancaMedicamentoQual,
       String genero,
       @JsonProperty("orientacao_sexual") String orientacaoSexual,
+      @JsonProperty("orientacao_sexual_outro") String orientacaoSexualOutro,
       @JsonProperty("cor_raca") String corRaca,
       String pcd,
       @JsonProperty("tipos_deficiencia") List<String> tiposDeficiencia,
@@ -155,8 +168,10 @@ public class InscricaoController {
   // que o relatório socioeconômico acumule variações do mesmo dado.
   private static final Set<String> GENEROS =
       Set.of("Mulher Cisgênero", "Mulher Transgênero", "Não Binária (feminizadas/lidas como femininas)");
+  // "Outra orientação sexual" pede a autodescrição em texto livre (orientacao_sexual_outro).
+  private static final String ORIENTACAO_OUTRA = "Outra orientação sexual";
   private static final Set<String> ORIENTACOES =
-      Set.of("Heterossexual", "Homossexual", "Bissexual", "Assexual", "Pansexual");
+      Set.of("Heterossexual", "Lésbica", "Bissexual", "Pansexual", "Assexual", ORIENTACAO_OUTRA);
   private static final Set<String> CORES_RACAS = Set.of("Amarela", "Preta", "Indígena", "Branca", "Parda");
   private static final Set<String> SIM_NAO = Set.of("Sim", "Não");
   private static final Set<String> DEFICIENCIAS =
@@ -272,6 +287,10 @@ public class InscricaoController {
 
     exigirOpcao(errors, "genero", req.genero(), GENEROS, "Selecione como você se identifica");
     exigirOpcao(errors, "orientacao_sexual", req.orientacaoSexual(), ORIENTACOES, "Selecione sua orientação sexual");
+    if (ORIENTACAO_OUTRA.equals(req.orientacaoSexual())
+        && (req.orientacaoSexualOutro() == null || req.orientacaoSexualOutro().isBlank())) {
+      errors.put("orientacao_sexual_outro", "Descreva como você se identifica");
+    }
     exigirOpcao(errors, "cor_raca", req.corRaca(), CORES_RACAS, "Selecione sua cor ou raça/etnia");
     exigirOpcao(errors, "pcd", req.pcd(), SIM_NAO, "Informe se é pessoa com deficiência");
     exigirOpcao(errors, "tem_filhos", req.temFilhos(), FILHOS, "Informe se tem filhos");
@@ -401,6 +420,8 @@ public class InscricaoController {
             : null);
     ficha.setGenero(req.genero());
     ficha.setOrientacaoSexual(req.orientacaoSexual());
+    ficha.setOrientacaoSexualOutro(
+        ORIENTACAO_OUTRA.equals(req.orientacaoSexual()) ? trim(req.orientacaoSexualOutro()) : null);
     ficha.setCorRaca(req.corRaca());
     ficha.setPcd(req.pcd());
     ficha.setTemFilhos(req.temFilhos());
@@ -501,7 +522,9 @@ public class InscricaoController {
       @RequestParam(defaultValue = "10") int perPage,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String turma,
-      @RequestParam(required = false) String search) {
+      @RequestParam(required = false) String search,
+      @RequestParam(name = "pontuacao_minima", required = false) Integer pontuacaoMinima,
+      @RequestParam(name = "pendentes_analise", required = false) Boolean pendentesAnalise) {
     requireLeitura();
     StatusInscricao st = null;
     if (status != null && !status.isBlank() && !"ALL".equals(status)) {
@@ -512,6 +535,20 @@ public class InscricaoController {
 
     List<FichaInscricao> classificadas =
         classificarPorPrioridade(inscricoes.searchForPriority(st, turmaFiltro, searchFiltro));
+    // A pontuação é calculada em memória por classificarPorPrioridade, então o corte por
+    // prioridade também precisa ser aplicado aqui — não dá para filtrar no banco.
+    if (pontuacaoMinima != null) {
+      classificadas =
+          classificadas.stream()
+              .filter(f -> f.getPontuacaoPrioridade() >= pontuacaoMinima)
+              .collect(Collectors.toCollection(ArrayList::new));
+    }
+    if (Boolean.TRUE.equals(pendentesAnalise)) {
+      classificadas =
+          classificadas.stream()
+              .filter(f -> PENDENTES_DE_ANALISE.contains(f.getStatus()))
+              .collect(Collectors.toCollection(ArrayList::new));
+    }
     int porPagina = Math.max(1, Math.min(perPage, 100));
     int pagina = Math.max(1, page);
     int inicio = Math.min((pagina - 1) * porPagina, classificadas.size());
@@ -737,15 +774,11 @@ public class InscricaoController {
   @PatchMapping("/inscricoes/{id}")
   @Transactional
   public FichaInscricao update(@PathVariable String id, @RequestBody UpdateInscricaoRequest req) {
+    // Administrativo e Gestão Geral têm as mesmas permissões: os dois aprovam, mandam para a lista
+    // de espera e chamam alguém da lista quando abre vaga.
     Usuario atual = CurrentUser.require(Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
     FichaInscricao ficha = load(id);
     if (req.status() != null && !req.status().isBlank()) {
-      if (atual.getPerfil() != Perfil.ADMINISTRATIVO) {
-        throw new ApiException(
-            HttpStatus.FORBIDDEN,
-            "forbidden",
-            "Somente o Administrativo pode analisar e alterar o status da inscrição.");
-      }
       StatusInscricao novoStatus = StatusInscricao.valueOf(req.status());
       if (novoStatus == StatusInscricao.APROVADA
           && ficha.getStatus() != StatusInscricao.APROVADA) {
@@ -753,6 +786,7 @@ public class InscricaoController {
       }
       ficha.setStatus(novoStatus);
       sincronizarContaDaAluna(ficha, novoStatus);
+      if (novoStatus == StatusInscricao.APROVADA) vincularTurmaDoNucleo(ficha);
     }
     boolean dataNova =
         req.dataPrimeiraAula() != null
@@ -785,7 +819,7 @@ public class InscricaoController {
   @Transactional
   public Map<String, Object> decidirVagaCrianca(
       @PathVariable String id, @RequestBody VagaCriancaRequest req) {
-    Usuario atual = CurrentUser.require(Perfil.ADMINISTRATIVO);
+    Usuario atual = CurrentUser.require(Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
     FichaInscricao ficha = load(id);
     String status = req == null || req.status() == null ? "" : req.status().trim().toUpperCase();
     if (!VAGA_CRIANCA_APROVADA.equals(status) && !VAGA_CRIANCA_NAO_APROVADA.equals(status)) {
@@ -972,6 +1006,19 @@ public class InscricaoController {
             "projeto", projeto,
             "nucleo", nucleo == null ? "" : nucleo.getNome(),
             "data", formatarData(ficha.getDataPrimeiraAula())));
+  }
+
+  /**
+   * Cada núcleo tem uma única turma, então a aluna aprovada entra direto nela — não existe passo de
+   * alocação. Quando o núcleo ainda não tem turma criada, a ficha fica sem turma e o vínculo é
+   * feito na criação da turma.
+   */
+  private void vincularTurmaDoNucleo(FichaInscricao ficha) {
+    Nucleo nucleo = nucleoDa(ficha);
+    if (nucleo == null) return;
+    turmas.findByNucleoIdOrderByNomeAsc(nucleo.getId()).stream()
+        .findFirst()
+        .ifPresent(turma -> ficha.setTurmaId(turma.getId()));
   }
 
   private Nucleo nucleoDa(FichaInscricao ficha) {

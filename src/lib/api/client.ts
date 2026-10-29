@@ -150,8 +150,33 @@ async function request<T>(
   return data as T
 }
 
+/**
+ * Última resposta de cada GET, com o texto que a gerou. As telas atualizam por polling a cada 10 s
+ * (`useRealtime`), e cada ciclo trazia um objeto novo mesmo quando o conteúdo era idêntico: o React
+ * via "mudança", redesenhava a tela e os gráficos refaziam a animação — a interface ficava
+ * piscando. Devolvendo o mesmo objeto quando nada mudou, o `setState` das telas é ignorado.
+ */
+const ultimaRespostaGet = new Map<string, { texto: string; dados: unknown }>()
+
+async function getEstavel<T>(path: string): Promise<T> {
+  const dados = await request<T>('GET', path)
+  if (dados === null || typeof dados !== 'object') return dados
+  // Compara pela serialização do objeto já entregue: se alguma tela o tiver alterado, ele deixa de
+  // bater e a resposta nova é usada, em vez de devolver um objeto adulterado.
+  const texto = JSON.stringify(dados)
+  const anterior = ultimaRespostaGet.get(path)
+  if (anterior && anterior.texto === texto && JSON.stringify(anterior.dados) === texto) {
+    return anterior.dados as T
+  }
+  ultimaRespostaGet.set(path, { texto, dados })
+  return dados
+}
+
+// Troca de conta não pode reaproveitar dados da sessão anterior.
+authStore.onChange(() => ultimaRespostaGet.clear())
+
 export const api = {
-  get: <T>(path: string) => request<T>('GET', path),
+  get: <T>(path: string) => getEstavel<T>(path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

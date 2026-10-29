@@ -15,16 +15,22 @@ export interface InscricaoFilter {
   search?: string
   page?: number
   perPage?: number
+  /** Mantém só quem alcançou ao menos esta pontuação de prioridade. */
+  pontuacaoMinima?: number
+  /** Mantém só quem ainda espera decisão (Aguardando e Em análise; a fila de espera fica fora). */
+  pendentesAnalise?: boolean
 }
 
 export const getInscricoesPaginated = async (
   filter: InscricaoFilter = {},
 ): Promise<PaginatedInscricoes> => {
-  const { page = 1, perPage = 10, status, turma, search } = filter
+  const { page = 1, perPage = 10, status, turma, search, pontuacaoMinima, pendentesAnalise } = filter
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) })
   if (status && status !== 'ALL') params.set('status', status)
   if (turma && turma !== 'ALL') params.set('turma', turma)
   if (search && search.trim()) params.set('search', search.trim())
+  if (pontuacaoMinima != null) params.set('pontuacao_minima', String(pontuacaoMinima))
+  if (pendentesAnalise) params.set('pendentes_analise', 'true')
 
   return api.get<PaginatedInscricoes>(`/api/inscricoes?${params.toString()}`)
 }

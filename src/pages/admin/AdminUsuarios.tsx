@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/table'
 import { UserPlus, Loader2, Search, GraduationCap, Users, ShieldCheck, HeartHandshake, BarChart3, MapPin, Trash2, KeyRound, ArrowRightLeft } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
-import { turmaLabels } from '@/lib/constants'
+import { perfilLabels, turmaLabels, nucleosCadastrados } from '@/lib/constants'
 import { toast } from '@/components/ui/use-toast'
 
 // ─── Configuração dos perfis ───────────────────────────────────────────────────
@@ -47,31 +47,31 @@ interface PerfilConfig {
 
 const PERFIS: Record<PerfilUsuario, PerfilConfig> = {
   ALUNA_FF: {
-    label: 'Aluna',
+    label: perfilLabels.ALUNA_FF,
     descricao: 'Acessa seu painel, ficha de confirmação, calendário e mural.',
     icon: GraduationCap,
     cor: 'text-pink-600 bg-pink-50',
   },
   PROFESSOR: {
-    label: 'Professor(a)',
+    label: perfilLabels.PROFESSOR,
     descricao: 'Registra chamada das aulas e gerencia atendimentos.',
     icon: Users,
     cor: 'text-blue-600 bg-blue-50',
   },
   ADMINISTRATIVO: {
-    label: 'Administrativo',
+    label: perfilLabels.ADMINISTRATIVO,
     descricao: 'Gerencia inscrições, usuários, mural e dashboard administrativo.',
     icon: ShieldCheck,
     cor: 'text-purple-600 bg-purple-50',
   },
   ASSISTENTE_SOCIAL: {
-    label: 'Assistente Social',
+    label: perfilLabels.ASSISTENTE_SOCIAL,
     descricao: 'Acessa inscrições e atendimentos das alunas.',
     icon: HeartHandshake,
     cor: 'text-emerald-600 bg-emerald-50',
   },
   GESTAO_GERAL: {
-    label: 'Gestão Geral',
+    label: perfilLabels.GESTAO_GERAL,
     descricao: 'Acesso completo: indicadores, inscrições, usuários, mural e atendimentos.',
     icon: BarChart3,
     cor: 'text-orange-600 bg-orange-50',
@@ -220,7 +220,7 @@ function TransferirNucleoDialog({ usuario, onClose, onSuccess }: { usuario: Usua
         <div className="space-y-4 py-2">
           <p className="text-sm">Transferir <strong>{usuario?.name}</strong> para outro núcleo.</p>
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">As presenças e faltas anteriores serão mantidas e continuarão contando no histórico da aluna.</div>
-          <div className="space-y-2"><Label>Novo núcleo</Label><Select value={turma} onValueChange={setTurma}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{Object.entries(turmaLabels).filter(([key]) => key !== usuario?.turma).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select></div>
+          <div className="space-y-2"><Label>Novo núcleo</Label><Select value={turma} onValueChange={setTurma}><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{nucleosCadastrados.filter(({ codigo }) => codigo !== usuario?.turma).map(({ codigo, nome }) => <SelectItem key={codigo} value={codigo}>{nome}</SelectItem>)}</SelectContent></Select></div>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={transferir} disabled={!turma || loading}>{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmar transferência</Button></DialogFooter>
@@ -501,8 +501,8 @@ function NovoUsuarioDialog({
                   <SelectValue placeholder="Selecione a turma" />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(turmaLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  {nucleosCadastrados.map(({ codigo, nome }) => (
+                    <SelectItem key={codigo} value={codigo}>{nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

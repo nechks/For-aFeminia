@@ -171,6 +171,47 @@ class InscricaoFluxoIntegrationTest {
     assertThat(conta.getTurma()).isEqualTo("CENTRO_VITORIA");
   }
 
+  /** A Gestão Geral tem as mesmas permissões do Administrativo sobre a inscrição. */
+  @Test
+  void gestaoMandaParaListaDeEsperaEDepoisAprova() throws Exception {
+    String email = "candidata-espera@teste.com";
+    MvcResult criada =
+        mvc.perform(
+                post("/api/inscricao/forca-feminina")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(inscricaoJson(cpfValido("390533447"), email)))
+            .andExpect(status().isCreated())
+            .andReturn();
+    String fichaId =
+        objectMapper.readTree(criada.getResponse().getContentAsString()).get("id").asText();
+
+    Usuario gestao = new Usuario();
+    gestao.setName("Gestão Teste");
+    gestao.setEmail("gestao-espera@teste.com");
+    gestao.setPasswordHash(passwordEncoder.encode(SENHA));
+    gestao.setPerfil(Perfil.GESTAO_GERAL);
+    gestao.setAtivo(true);
+    usuarios.save(gestao);
+    String tokenGestao = loginToken("gestao-espera@teste.com", SENHA);
+
+    mvc.perform(
+            patch("/api/inscricoes/" + fichaId)
+                .header("Authorization", "Bearer " + tokenGestao)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"LISTA_ESPERA\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("LISTA_ESPERA"));
+
+    // Abriu vaga: a Gestão chama a aluna da lista de espera.
+    mvc.perform(
+            patch("/api/inscricoes/" + fichaId)
+                .header("Authorization", "Bearer " + tokenGestao)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"APROVADA\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("APROVADA"));
+  }
+
   @Test
   void reprovacaoBloqueiaLoginComMensagemPropria() throws Exception {
     String email = "candidata3@teste.com";

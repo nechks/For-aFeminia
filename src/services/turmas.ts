@@ -87,9 +87,6 @@ export const desvincularProfissional = (turmaId: string, userId: string) =>
 export const getAlunasTurma = (turmaId: string) =>
   api.get<AlunaTurma[]>(`/api/turmas/${turmaId}/alunas`)
 
-export const alocarAluna = (turmaId: string, userId: string) =>
-  api.post<AlunaTurma>(`/api/turmas/${turmaId}/alunas`, { user_id: userId })
-
 /** Resultado da alocação em lote: quem entrou, quem já estava e quem foi recusada (e por quê). */
 export interface AlocacaoEmLote {
   turma_id: string
@@ -97,13 +94,3 @@ export interface AlocacaoEmLote {
   ja_na_turma: string[]
   recusadas: { user_id: string; nome?: string; motivo: string }[]
 }
-
-/**
- * Aloca várias alunas na turma de uma vez. Recusas individuais (outro núcleo, turma lotada) não
- * derrubam o lote — as válidas entram e a resposta explica quem ficou de fora.
- */
-export const alocarAlunasEmLote = (turmaId: string, alunasIds: string[]) =>
-  api.post<AlocacaoEmLote>(`/api/turmas/${turmaId}/alunas/lote`, { alunas_ids: alunasIds })
-
-export const desalocarAluna = (turmaId: string, userId: string) =>
-  api.delete<void>(`/api/turmas/${turmaId}/alunas/${userId}`)

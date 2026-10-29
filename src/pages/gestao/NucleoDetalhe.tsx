@@ -12,22 +12,20 @@ import {
   type Nucleo,
   type ZonaPrioritaria,
 } from '@/services/nucleos'
-import { getProjetos, type Projeto } from '@/services/projetos'
+import { getProfissionaisDoProjeto, getProjetos, type Projeto } from '@/services/projetos'
 import { vincularProfissionaisAoNucleo } from '@/services/nucleos'
 import {
-  alocarAluna,
-  alocarAlunasEmLote,
   criarTurma,
-  desalocarAluna,
   desvincularProfissional,
   editarTurma,
   excluirTurma,
   getTurmas,
   type Turma,
 } from '@/services/turmas'
-import api from '@/lib/api/client'
 import type { Usuario } from '@/lib/types'
 import { getErrorMessage } from '@/lib/api/errors'
+import { getIndicadoresPorTurma, type IndicadorTurma } from '@/services/indicadores'
+import { getPresencasDetalhes, type PresencaDetalhe } from '@/services/presenca'
 import {
   chamadasPermitidas,
   diasSemana,
@@ -37,6 +35,7 @@ import {
   tiposProfissionais,
   turnoLabel,
   turnos,
+  formatarAulas,
 } from '@/lib/turmas'
 import { MultiSelect } from '@/components/ui/multi-select'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -58,6 +57,7 @@ import {
   DialogContent,
   DialogFooter,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/use-toast'
@@ -66,6 +66,9 @@ import {
   AlertTriangle,
   ArrowLeft,
   Building2,
+  CalendarDays,
+  CircleCheck,
+  CircleX,
   GraduationCap,
   Loader2,
   MapPin,
@@ -84,7 +87,6 @@ const turmaVazia = {
   horario_inicio: '',
   horario_fim: '',
 }
-const SEM_TURMA = '__sem_turma__'
 
 /** Deixa explícito, na hora de escolher o tipo, qual chamada aquela função abre. */
 const descricaoChamadas = (tipoProfissional: string) => {
@@ -106,6 +108,12 @@ export default function NucleoDetalhe() {
   const [equipe, setEquipe] = useState<MembroNucleo[]>([])
   const [alunas, setAlunas] = useState<AlunaNucleo[]>([])
   const [profissionais, setProfissionais] = useState<Usuario[]>([])
+  const [indicadoresNucleo, setIndicadoresNucleo] = useState<IndicadorTurma[]>([])
+  const [presencasNucleo, setPresencasNucleo] = useState<PresencaDetalhe[]>([])
+  const [faltasNucleo, setFaltasNucleo] = useState<PresencaDetalhe[]>([])
+  const [detalheChamadas, setDetalheChamadas] = useState<'alunas' | 'presencas' | 'faltas' | null>(
+    null,
+  )
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
   // As zonas são cadastros globais; aqui o núcleo apenas vincula as que utiliza.
@@ -119,32 +127,48 @@ export default function NucleoDetalhe() {
   const [turmaExcluir, setTurmaExcluir] = useState<Turma | null>(null)
   const [senhaExclusao, setSenhaExclusao] = useState('')
   // Alocação de alunas a partir da turma, com seleção múltipla.
-  const [alocacao, setAlocacao] = useState<{ turma: Turma; alunas_ids: string[] } | null>(null)
-  // Vínculo da equipe: vários profissionais entram de uma vez na mesma turma e com o mesmo papel.
+  // Vínculo da equipe: vários profissionais entram de uma vez na mesma turma, cada um com a sua
+  // função (`funcoes` guarda a escolha por pessoa).
   const [novoVinculo, setNovoVinculo] = useState<{
     turma_id: string
     profissionais_ids: string[]
-    tipo_profissional: string
+    funcoes: Record<string, string>
   } | null>(null)
 
   const load = useCallback(async () => {
     if (!id) return
-    const [n, ts, eq, al, ps, projs, zonas] = await Promise.all([
-      getNucleo(id),
+    const n = await getNucleo(id)
+    const [ts, eq, al, ps, projs, zonas, indicadores, presencas, faltas] = await Promise.all([
       getTurmas(id),
       getEquipeNucleo(id),
       getAlunasNucleo(id),
-      api.get<Usuario[]>('/api/users?perfil=PROFESSOR,ASSISTENTE_SOCIAL'),
+      n.projeto_id ? getProfissionaisDoProjeto(n.projeto_id) : Promise.resolve([]),
       getProjetos(),
       getZonasPrioritarias(),
+      getIndicadoresPorTurma(),
+      getPresencasDetalhes(true),
+      getPresencasDetalhes(false),
     ])
     setNucleo(n)
     setTurmas(ts)
     setEquipe(eq)
     setAlunas(al)
-    setProfissionais(ps)
+    setProfissionais(
+      ps.map((p) => ({
+        id: p.user_id,
+        name: p.nome,
+        email: p.email,
+        perfil: p.perfil as Usuario['perfil'],
+        ativo: true,
+        created: '',
+        updated: '',
+      })),
+    )
     setProjeto(projs.find((p) => p.id === n.projeto_id) ?? null)
     setTodasZonas(zonas)
+    setIndicadoresNucleo(indicadores.filter((item) => item.nucleo_id === n.id))
+    setPresencasNucleo(presencas.filter((item) => item.turma === n.codigo))
+    setFaltasNucleo(faltas.filter((item) => item.turma === n.codigo))
   }, [id])
 
   useEffect(() => {
@@ -197,6 +221,17 @@ export default function NucleoDetalhe() {
   }, [alunas])
   const semTurma = alunas.filter((a) => !a.turma_id).length
   const zonasPrioritarias = nucleo?.zonas_prioritarias ?? []
+  const totalPresencas = indicadoresNucleo.reduce((soma, item) => soma + item.presencas, 0)
+  const totalFaltas = indicadoresNucleo.reduce(
+    (soma, item) => soma + item.faltas_justificadas + item.faltas_sem_justificativa,
+    0,
+  )
+  const registrosChamadas =
+    detalheChamadas === 'presencas'
+      ? presencasNucleo
+      : detalheChamadas === 'faltas'
+        ? faltasNucleo
+        : []
 
   const executar = async (acao: () => Promise<unknown>, sucesso: string) => {
     setSalvando(true)
@@ -232,37 +267,6 @@ export default function NucleoDetalhe() {
       '🗺️ Zona vinculada ao núcleo!',
     )
     if (ok) setZonaParaVincular('')
-  }
-
-  /**
-   * Aloca as alunas selecionadas na turma. A resposta separa quem entrou de quem já estava e de
-   * quem foi recusada, então o aviso conta o que realmente aconteceu.
-   */
-  const salvarAlocacao = async () => {
-    if (!alocacao || !alocacao.alunas_ids.length) return
-    setSalvando(true)
-    try {
-      const resultado = await alocarAlunasEmLote(alocacao.turma.id, alocacao.alunas_ids)
-      const partes: string[] = []
-      if (resultado.ja_na_turma.length)
-        partes.push(`${resultado.ja_na_turma.length} já estava(m) na turma`)
-      resultado.recusadas.forEach((r) => partes.push(r.motivo))
-      toast({
-        title: `🙋‍♀️ ${resultado.alocadas.length} aluna(s) alocada(s) em ${alocacao.turma.nome}.`,
-        description: partes.length ? partes.join(' · ') : undefined,
-        variant: resultado.alocadas.length ? undefined : 'destructive',
-      })
-      await load()
-      setAlocacao(null)
-    } catch (e) {
-      toast({
-        title: 'Não foi possível alocar',
-        description: getErrorMessage(e),
-        variant: 'destructive',
-      })
-    } finally {
-      setSalvando(false)
-    }
   }
 
   const confirmarExclusaoTurma = async () => {
@@ -318,15 +322,28 @@ export default function NucleoDetalhe() {
    * Vincula em lote. A resposta separa quem entrou de quem já estava e de quem foi recusado por
    * choque de horário, então o aviso conta exatamente o que aconteceu em vez de só "salvo".
    */
+  // No mesmo núcleo o profissional tem uma única função: quem já atua aqui entra com ela, travada.
+  const funcaoNoNucleo: Record<string, string> = {}
+  equipe.forEach((m) => {
+    funcaoNoNucleo[m.user_id] ??= m.tipo_profissional
+  })
+  const funcaoDe = (userId: string) =>
+    funcaoNoNucleo[userId] ?? novoVinculo?.funcoes[userId] ?? ''
+  const todosComFuncao =
+    !!novoVinculo?.profissionais_ids.length &&
+    novoVinculo.profissionais_ids.every((userId) => !!funcaoDe(userId))
+
   const salvarVinculo = async () => {
-    if (!novoVinculo || !novoVinculo.profissionais_ids.length) return
+    if (!novoVinculo || !todosComFuncao) return
     setSalvando(true)
     try {
       const resultado = await vincularProfissionaisAoNucleo(
         id,
-        novoVinculo.profissionais_ids,
         novoVinculo.turma_id,
-        novoVinculo.tipo_profissional,
+        novoVinculo.profissionais_ids.map((userId) => ({
+          user_id: userId,
+          tipo_profissional: funcaoDe(userId),
+        })),
       )
       const partes: string[] = []
       if (resultado.ja_vinculados.length)
@@ -402,6 +419,7 @@ export default function NucleoDetalhe() {
           <TabsTrigger value="turmas">🎓 Turmas ({turmas.length})</TabsTrigger>
           <TabsTrigger value="equipe">👥 Equipe ({equipe.length})</TabsTrigger>
           <TabsTrigger value="alunas">🙋‍♀️ Alunas ({alunas.length})</TabsTrigger>
+          <TabsTrigger value="chamadas">📅 Chamadas</TabsTrigger>
           <TabsTrigger value="zonas">🗺️ Zonas ({zonasPrioritarias.length})</TabsTrigger>
         </TabsList>
 
@@ -424,7 +442,8 @@ export default function NucleoDetalhe() {
                 <GraduationCap className="h-8 w-8 text-muted-foreground" />
                 <p className="font-medium">Nenhuma turma aberta neste núcleo.</p>
                 <p className="text-sm text-muted-foreground">
-                  Abra a primeira turma para vincular a equipe e alocar as alunas.
+                  Abra a turma do núcleo para vincular a equipe. As alunas aprovadas entram nela
+                  automaticamente.
                 </p>
               </CardContent>
             </Card>
@@ -462,19 +481,11 @@ export default function NucleoDetalhe() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setAlocacao({ turma: t, alunas_ids: [] })}
-                      >
-                        <Users className="mr-1.5 h-4 w-4" />
-                        Alocar alunas
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() =>
                           setNovoVinculo({
                             turma_id: t.id,
                             profissionais_ids: [],
-                            tipo_profissional: '',
+                            funcoes: {},
                           })
                         }
                       >
@@ -506,6 +517,72 @@ export default function NucleoDetalhe() {
           )}
         </TabsContent>
 
+        {/* ---------------------------------------------------------- chamadas */}
+        <TabsContent value="chamadas" className="space-y-5">
+          <div>
+            <h2 className="flex items-center gap-2 text-lg font-semibold">
+              <CalendarDays className="h-5 w-5 text-primary" /> Acompanhamento das chamadas
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Presenças e faltas deste núcleo. Cada chamada de Defesa Pessoal ou Roda de Conversa
+              vale meia aula.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card
+              role="button"
+              tabIndex={0}
+              className="cursor-pointer transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              onClick={() => setDetalheChamadas('alunas')}
+              onKeyDown={(e) =>
+                (e.key === 'Enter' || e.key === ' ') && setDetalheChamadas('alunas')
+              }
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Alunas no núcleo</CardTitle>
+              </CardHeader>
+              <CardContent className="text-3xl font-bold">{alunas.length}</CardContent>
+            </Card>
+            <Card
+              role="button"
+              tabIndex={0}
+              className="cursor-pointer transition hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              onClick={() => setDetalheChamadas('presencas')}
+              onKeyDown={(e) =>
+                (e.key === 'Enter' || e.key === ' ') && setDetalheChamadas('presencas')
+              }
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <CircleCheck className="h-4 w-4 text-emerald-600" /> Presenças
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-3xl font-bold text-emerald-600">
+                {formatarAulas(totalPresencas)}
+              </CardContent>
+            </Card>
+            <Card
+              role="button"
+              tabIndex={0}
+              className="cursor-pointer transition hover:-translate-y-0.5 hover:border-rose-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              onClick={() => setDetalheChamadas('faltas')}
+              onKeyDown={(e) =>
+                (e.key === 'Enter' || e.key === ' ') && setDetalheChamadas('faltas')
+              }
+            >
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <CircleX className="h-4 w-4 text-rose-600" /> Faltas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-3xl font-bold text-rose-600">
+                {formatarAulas(totalFaltas)}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         {/* ------------------------------------------------------------ equipe */}
         <TabsContent value="equipe" className="space-y-4">
           <div className="flex items-center justify-between">
@@ -518,7 +595,7 @@ export default function NucleoDetalhe() {
                 setNovoVinculo({
                   turma_id: turmas[0]?.id ?? '',
                   profissionais_ids: [],
-                  tipo_profissional: '',
+                  funcoes: {},
                 })
               }
             >
@@ -579,11 +656,11 @@ export default function NucleoDetalhe() {
         {/* ------------------------------------------------------------ alunas */}
         <TabsContent value="alunas" className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Alunas aprovadas neste núcleo. Cada aluna fica em uma turma por vez — a chamada usa essa
-            alocação.
+            Alunas aprovadas neste núcleo. Cada núcleo tem uma turma e a aluna entra nela ao ser
+            aprovada — a chamada usa esse vínculo.
             {semTurma > 0 && (
               <strong className="ml-1 text-amber-700">
-                {semTurma} sem turma.
+                {semTurma} sem turma — abra a turma do núcleo para que entrem nela.
               </strong>
             )}
           </p>
@@ -608,46 +685,8 @@ export default function NucleoDetalhe() {
                             turmasPorId[a.turma_id]?.turno,
                           )}`
                         : 'Sem turma'}
-                      {a.periodo_preferido &&
-                        ` · pediu ${turnoLabel(a.periodo_preferido).toLowerCase()}`}
                     </p>
-                    {/* Alocada num período diferente do que pediu — vale a gestão conferir. */}
-                    {a.turma_id &&
-                      a.periodo_preferido &&
-                      turmasPorId[a.turma_id]?.turno !== a.periodo_preferido && (
-                        <p className="mt-1 flex items-center gap-1.5 text-xs text-amber-700">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                          Período diferente do pedido na inscrição.
-                        </p>
-                      )}
                   </div>
-                  <Select
-                    value={a.turma_id ?? SEM_TURMA}
-                    disabled={salvando || !turmas.length}
-                    onValueChange={(v) => {
-                      if (v === SEM_TURMA) {
-                        if (!a.turma_id) return
-                        executar(
-                          () => desalocarAluna(a.turma_id as string, a.user_id),
-                          'Aluna removida da turma.',
-                        )
-                        return
-                      }
-                      executar(() => alocarAluna(v, a.user_id), 'Aluna alocada na turma!')
-                    }}
-                  >
-                    <SelectTrigger className="w-[240px]">
-                      <SelectValue placeholder="Selecionar turma..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={SEM_TURMA}>Sem turma</SelectItem>
-                      {turmas.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nome} · {turnoLabel(t.turno)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               ))}
             </div>
@@ -760,6 +799,72 @@ export default function NucleoDetalhe() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={detalheChamadas !== null}
+        onOpenChange={(aberto) => !aberto && setDetalheChamadas(null)}
+      >
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {detalheChamadas === 'alunas'
+                ? 'Alunas do núcleo'
+                : detalheChamadas === 'presencas'
+                  ? 'Presenças registradas'
+                  : 'Faltas registradas'}
+            </DialogTitle>
+            <DialogDescription>
+              {nucleo.nome}. Consulte os nomes e as informações que formam o total do card.
+            </DialogDescription>
+          </DialogHeader>
+
+          {detalheChamadas === 'alunas' ? (
+            alunas.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                Nenhuma aluna neste núcleo.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {alunas.map((aluna) => (
+                  <div
+                    key={aluna.user_id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
+                  >
+                    <strong>{aluna.nome_completo}</strong>
+                    <Badge variant="secondary">{aluna.turma_nome || 'Sem turma'}</Badge>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : registrosChamadas.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Nenhum registro encontrado.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {registrosChamadas.map((registro) => (
+                <div key={registro.id} className="rounded-lg border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>{registro.aluna_nome}</strong>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(`${registro.data_aula}T12:00:00`).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">
+                    Professor(a): {registro.professor_nome || '—'}
+                  </p>
+                  {detalheChamadas === 'faltas' && (
+                    <p className="mt-1">
+                      <span className="font-medium">Justificativa:</span>{' '}
+                      {registro.justificativa || 'Não informada'}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ------------------------------------------------------- dialog turma */}
       <Dialog
@@ -932,32 +1037,90 @@ export default function NucleoDetalhe() {
                   emptyMessage="Nenhum profissional cadastrado."
                 />
                 <p className="text-xs text-muted-foreground">
-                  Todos os selecionados entram nesta turma com a mesma função. Quem já estiver na
-                  equipe é ignorado, sem erro.
+                  Aqui aparecem somente profissionais previamente vinculados ao projeto. Quem já
+                  estiver na equipe desta turma é ignorado, sem erro.
                 </p>
               </div>
-              <div className="space-y-2">
-                <Label>🏷️ Tipo de profissional na turma *</Label>
-                <Select
-                  value={novoVinculo.tipo_profissional}
-                  onValueChange={(v) => setNovoVinculo({ ...novoVinculo, tipo_profissional: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {tiposProfissionais.map(([valor, label]) => (
-                      <SelectItem key={valor} value={valor}>
-                        {label} — {descricaoChamadas(valor)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Cada profissional acessa só a chamada da própria função. A mesma pessoa pode atuar
-                  em várias turmas, núcleos e projetos — desde que não no mesmo dia e período.
-                </p>
-              </div>
+              {novoVinculo.profissionais_ids.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label>🏷️ Função de cada profissional *</Label>
+                    {novoVinculo.profissionais_ids.filter((u) => !funcaoNoNucleo[u]).length > 1 && (
+                      <Select
+                        value=""
+                        onValueChange={(v) =>
+                          setNovoVinculo({
+                            ...novoVinculo,
+                            funcoes: Object.fromEntries(
+                              novoVinculo.profissionais_ids.map((u) => [u, v]),
+                            ),
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-auto gap-2 text-xs">
+                          <SelectValue placeholder="Aplicar a todos..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tiposProfissionais.map(([valor, label]) => (
+                            <SelectItem key={valor} value={valor}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <div className="divide-y rounded-lg border">
+                    {novoVinculo.profissionais_ids.map((userId) => {
+                      const pessoa = profissionais.find((p) => p.id === userId)
+                      const travada = funcaoNoNucleo[userId]
+                      return (
+                        <div
+                          key={userId}
+                          className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">
+                              {pessoa?.nomeSocial?.trim() || pessoa?.name || 'Profissional'}
+                            </p>
+                            {travada && (
+                              <p className="text-xs text-muted-foreground">
+                                Já atua neste núcleo nesta função.
+                              </p>
+                            )}
+                          </div>
+                          <Select
+                            value={funcaoDe(userId)}
+                            disabled={!!travada}
+                            onValueChange={(v) =>
+                              setNovoVinculo({
+                                ...novoVinculo,
+                                funcoes: { ...novoVinculo.funcoes, [userId]: v },
+                              })
+                            }
+                          >
+                            <SelectTrigger className="sm:w-64">
+                              <SelectValue placeholder="Escolha a função..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {tiposProfissionais.map(([valor, label]) => (
+                                <SelectItem key={valor} value={valor}>
+                                  {label} — {descricaoChamadas(valor)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    No mesmo núcleo cada profissional tem uma única função; em outro núcleo pode ter
+                    outra. Cada um acessa só a chamada da própria função, e ninguém fica em duas
+                    turmas no mesmo dia e período.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -967,69 +1130,12 @@ export default function NucleoDetalhe() {
             <Button
               onClick={salvarVinculo}
               disabled={
-                salvando ||
-                !novoVinculo?.turma_id ||
-                !novoVinculo?.profissionais_ids.length ||
-                !novoVinculo?.tipo_profissional
+                salvando || !novoVinculo?.turma_id || !todosComFuncao
               }
             >
               {salvando
                 ? 'Vinculando...'
                 : `Vincular ${novoVinculo?.profissionais_ids.length ?? 0}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ------------------------------------------------- dialog alocar alunas */}
-      <Dialog open={!!alocacao} onOpenChange={(o) => !o && setAlocacao(null)}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>🙋‍♀️ Alocar alunas em {alocacao?.turma.nome}</DialogTitle>
-          </DialogHeader>
-          {alocacao && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Alunas aprovadas do núcleo *</Label>
-                <MultiSelect
-                  options={alunas
-                    .filter((a) => a.turma_id !== alocacao.turma.id)
-                    .map((a) => ({
-                      value: a.user_id,
-                      label: a.nome_completo,
-                      hint: a.turma_id
-                        ? `hoje em ${a.turma_nome ?? turmasPorId[a.turma_id]?.nome ?? 'outra turma'}`
-                        : a.periodo_preferido
-                          ? `sem turma · pediu ${turnoLabel(a.periodo_preferido).toLowerCase()}`
-                          : 'sem turma',
-                    }))}
-                  value={alocacao.alunas_ids}
-                  onChange={(v) => setAlocacao({ ...alocacao, alunas_ids: v })}
-                  placeholder="Selecione as alunas..."
-                  searchPlaceholder="Buscar pelo nome..."
-                  emptyMessage="Nenhuma aluna disponível para esta turma."
-                />
-                <p className="text-xs text-muted-foreground">
-                  Cada aluna fica em uma turma por vez: quem já está em outra turma do núcleo é
-                  transferida para esta.
-                  {alocacao.turma.capacidade
-                    ? ` A turma comporta ${alocacao.turma.capacidade} alunas — hoje tem ${
-                        (alunasPorTurma[alocacao.turma.id] ?? []).length
-                      }.`
-                    : ''}
-                </p>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAlocacao(null)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={salvarAlocacao}
-              disabled={salvando || !alocacao?.alunas_ids.length}
-            >
-              {salvando ? 'Alocando...' : `Alocar ${alocacao?.alunas_ids.length ?? 0}`}
             </Button>
           </DialogFooter>
         </DialogContent>

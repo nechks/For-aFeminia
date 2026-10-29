@@ -3,6 +3,7 @@ package br.org.atkdgv.forcafeminina.web;
 import br.org.atkdgv.forcafeminina.domain.*;
 import br.org.atkdgv.forcafeminina.repo.*;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.text.Normalizer;
 import java.util.*;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,9 +36,12 @@ public class TurmaController {
   private final UsuarioRepository usuarios;
   private final FichaInscricaoRepository inscricoes;
   private final ProjetoRepository projetos;
+  private final ProjetoProfissionalRepository profissionaisDoProjeto;
   private final PresencaRepository presencas;
   private final RegistroAulaRepository registrosAula;
+  private final AvaliacaoAlunaRepository avaliacoes;
   private final PasswordEncoder encoder;
+  private final br.org.atkdgv.forcafeminina.service.FuncaoNoNucleo funcaoNoNucleo;
 
   public TurmaController(
       TurmaRepository turmas,
@@ -46,17 +50,23 @@ public class TurmaController {
       UsuarioRepository usuarios,
       FichaInscricaoRepository inscricoes,
       ProjetoRepository projetos,
+      ProjetoProfissionalRepository profissionaisDoProjeto,
       PresencaRepository presencas,
       RegistroAulaRepository registrosAula,
-      PasswordEncoder encoder) {
+      AvaliacaoAlunaRepository avaliacoes,
+      PasswordEncoder encoder,
+      br.org.atkdgv.forcafeminina.service.FuncaoNoNucleo funcaoNoNucleo) {
+    this.funcaoNoNucleo = funcaoNoNucleo;
     this.turmas = turmas;
     this.nucleos = nucleos;
     this.equipe = equipe;
     this.usuarios = usuarios;
     this.inscricoes = inscricoes;
     this.projetos = projetos;
+    this.profissionaisDoProjeto = profissionaisDoProjeto;
     this.presencas = presencas;
     this.registrosAula = registrosAula;
+    this.avaliacoes = avaliacoes;
     this.encoder = encoder;
   }
 
@@ -134,6 +144,12 @@ public class TurmaController {
                 () ->
                     new ApiException(
                         HttpStatus.BAD_REQUEST, "nucleo_invalido", "Selecione um núcleo válido."));
+    // Cada núcleo tem uma única turma: a aluna aprovada entra direto nela, sem passo de alocação.
+    if (turmas.existsByNucleoId(t.getNucleoId()))
+      throw new ApiException(
+          HttpStatus.CONFLICT,
+          "turma_ja_existe",
+          "O núcleo " + nucleo.getNome() + " já tem uma turma. Edite a turma existente.");
     if (t.getNome() == null || t.getNome().isBlank())
       throw new ApiException(
           HttpStatus.BAD_REQUEST, "nome_obrigatorio", "Informe o nome da turma.");
@@ -160,7 +176,11 @@ public class TurmaController {
                 + ").");
     }
     String base =
-        t.getNome().trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_").replaceAll("(^_|_$)", "");
+        Normalizer.normalize(t.getNome().trim(), Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toUpperCase(Locale.ROOT)
+            .replaceAll("[^A-Z0-9]+", "_")
+            .replaceAll("(^_|_$)", "");
     if (base.length() < 3) base = "TURMA";
     if (base.length() > 64) base = base.substring(0, 64);
     String codigo = base;
@@ -169,7 +189,23 @@ public class TurmaController {
     t.setCodigo(codigo);
     t.setNome(t.getNome().trim());
     t.setAtivo(true);
-    return ResponseEntity.status(HttpStatus.CREATED).body(turmas.save(t));
+    Turma criada = turmas.save(t);
+    // O núcleo pode já ter alunas aprovadas quando a turma é criada. Como a turma é única, elas
+    // pertencem a ela — não há alocação a fazer.
+    vincularAlunasDoNucleo(nucleo, criada);
+    return ResponseEntity.status(HttpStatus.CREATED).body(criada);
+  }
+
+  /** Liga à turma do núcleo as alunas aprovadas que ainda estão sem turma. */
+  private void vincularAlunasDoNucleo(Nucleo nucleo, Turma turma) {
+    for (FichaInscricao ficha :
+        inscricoes.findByTurmaAndStatusOrderByNomeCompletoAsc(
+            nucleo.getCodigo(), StatusInscricao.APROVADA)) {
+      if (ficha.getTurmaId() == null || ficha.getTurmaId().isBlank()) {
+        ficha.setTurmaId(turma.getId());
+        inscricoes.save(ficha);
+      }
+    }
   }
 
   /**
@@ -240,7 +276,7 @@ public class TurmaController {
    * Exclui a turma. Exige a senha da Gestão Geral, como na exclusão de núcleo — é uma ação sem
    * volta e a confirmação por senha evita o clique errado.
    *
-   * <p>Turma com histórico (presenças ou registros de aula) ou com aluna alocada não é excluída:
+   * <p>Turma com histórico (presenças, avaliações ou registros de aula) ou com aluna alocada não é excluída:
    * apagá-la deixaria registros órfãos. Nesse caso o caminho é desativar a turma pela edição, que
    * a tira de circulação sem perder nada. Vínculos de equipe, por serem sempre recriáveis, são
    * removidos junto.
@@ -262,11 +298,13 @@ public class TurmaController {
           "turma_com_alunas",
           "Há alunas alocadas nesta turma. Realoque-as antes de excluir.");
     }
-    if (presencas.existsByTurmaId(id) || registrosAula.existsByTurmaId(id)) {
+    if (presencas.existsByTurmaId(id)
+        || registrosAula.existsByTurmaId(id)
+        || avaliacoes.existsByTurmaId(id)) {
       throw new ApiException(
           HttpStatus.CONFLICT,
           "turma_com_historico",
-          "Esta turma já tem chamadas ou registros de aula e não pode ser excluída. "
+          "Esta turma já tem chamadas, avaliações ou registros de aula e não pode ser excluída. "
               + "Desative-a na edição para tirá-la de circulação sem perder o histórico.");
     }
 
@@ -321,7 +359,24 @@ public class TurmaController {
           "perfil_invalido",
           "Alunas são alocadas na aba Alunas, não na equipe.");
 
+    Nucleo nucleo =
+        nucleos
+            .findById(turma.getNucleoId())
+            .orElseThrow(
+                () -> new ApiException(HttpStatus.NOT_FOUND, "not_found", "Núcleo não encontrado."));
+    if (nucleo.getProjetoId() == null
+        || !profissionaisDoProjeto.existsByProjetoIdAndUserId(
+            nucleo.getProjetoId(), alvo.getId())) {
+      throw new ApiException(
+          HttpStatus.CONFLICT,
+          "profissional_fora_do_projeto",
+          "Vincule primeiro este profissional ao projeto do núcleo.");
+    }
+
     validarConflitoDeHorario(alvo, turma);
+    String funcaoDivergente = funcaoNoNucleo.conflito(alvo, turma, req.tipoProfissional());
+    if (funcaoDivergente != null)
+      throw new ApiException(HttpStatus.CONFLICT, "funcao_divergente_no_nucleo", funcaoDivergente);
 
     TurmaEquipe vinculo =
         equipe.findByTurmaIdAndUserId(id, alvo.getId()).orElseGet(TurmaEquipe::new);
@@ -384,192 +439,8 @@ public class TurmaController {
     return body;
   }
 
-  public record AlocarAlunaRequest(@JsonProperty("user_id") String userId) {}
-
-  /** Aloca uma aluna aprovada do núcleo nesta turma. Uma aluna fica em uma turma por vez. */
-  @PostMapping("/{id}/alunas")
-  @Transactional
-  public Map<String, Object> alocarAluna(
-      @PathVariable String id, @RequestBody AlocarAlunaRequest req) {
-    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
-    Turma turma = carregar(id);
-    if (req == null || req.userId() == null || req.userId().isBlank())
-      throw new ApiException(HttpStatus.BAD_REQUEST, "aluna_obrigatoria", "Selecione a aluna.");
-
-    Nucleo nucleo =
-        nucleos
-            .findById(turma.getNucleoId())
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.BAD_REQUEST, "nucleo_invalido", "Núcleo da turma não encontrado."));
-
-    FichaInscricao ficha =
-        inscricoes
-            .findFirstByUserIdAndStatus(req.userId(), StatusInscricao.APROVADA)
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.BAD_REQUEST,
-                        "inscricao_invalida",
-                        "A aluna precisa ter inscrição aprovada para ser alocada em uma turma."));
-    if (!nucleo.getCodigo().equals(ficha.getTurma()))
-      throw new ApiException(
-          HttpStatus.CONFLICT,
-          "nucleo_divergente",
-          "Esta aluna pertence a outro núcleo. Transfira o núcleo dela antes de alocar na turma.");
-
-    if (turma.getCapacidade() != null) {
-      long ocupadas =
-          inscricoes
-              .findByTurmaIdAndStatusOrderByNomeCompletoAsc(turma.getId(), StatusInscricao.APROVADA)
-              .stream()
-              .filter(f -> !f.getId().equals(ficha.getId()))
-              .count();
-      if (ocupadas >= turma.getCapacidade())
-        throw new ApiException(
-            HttpStatus.CONFLICT,
-            "turma_lotada",
-            "A turma " + turma.getNome() + " já atingiu a capacidade de " + turma.getCapacidade() + ".");
-    }
-
-    ficha.setTurmaId(turma.getId());
-    inscricoes.save(ficha);
-    usuarios
-        .findById(req.userId())
-        .ifPresent(
-            aluna -> {
-              aluna.setTurmaId(turma.getId());
-              aluna.setNucleoId(turma.getNucleoId());
-              usuarios.save(aluna);
-            });
-
-    Map<String, Object> item = new LinkedHashMap<>();
-    item.put("inscricao_id", ficha.getId());
-    item.put("user_id", ficha.getUserId());
-    item.put("nome_completo", ficha.getNomeCompleto());
-    item.put("turma_id", ficha.getTurmaId());
-    return item;
-  }
-
-  public record AlocarAlunasEmLoteRequest(
-      @JsonProperty("alunas_ids") List<String> alunasIds) {}
-
-  /**
-   * Aloca várias alunas na turma de uma vez, no lugar de repetir a alocação uma a uma.
-   *
-   * <p>É idempotente: quem já está na turma é ignorado sem erro. As demais recusas — aluna de outro
-   * núcleo, sem inscrição aprovada ou turma lotada — não derrubam o lote: as alunas válidas entram e
-   * a resposta diz quem ficou de fora e por quê.
-   */
-  @PostMapping("/{id}/alunas/lote")
-  @Transactional
-  public Map<String, Object> alocarAlunasEmLote(
-      @PathVariable String id, @RequestBody AlocarAlunasEmLoteRequest req) {
-    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
-    Turma turma = carregar(id);
-    if (req == null || req.alunasIds() == null || req.alunasIds().isEmpty()) {
-      throw new ApiException(
-          HttpStatus.BAD_REQUEST, "alunas_obrigatorias", "Selecione ao menos uma aluna.");
-    }
-    Nucleo nucleo =
-        nucleos
-            .findById(turma.getNucleoId())
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.BAD_REQUEST, "nucleo_invalido", "Núcleo da turma não encontrado."));
-
-    List<String> alocadas = new ArrayList<>();
-    List<String> jaNaTurma = new ArrayList<>();
-    List<Map<String, String>> recusadas = new ArrayList<>();
-
-    // A ocupação é recontada a cada entrada, senão o lote inteiro passaria pela mesma checagem
-    // inicial e estouraria a capacidade da turma.
-    long ocupadas =
-        inscricoes
-            .findByTurmaIdAndStatusOrderByNomeCompletoAsc(turma.getId(), StatusInscricao.APROVADA)
-            .size();
-
-    for (String userId : new LinkedHashSet<>(req.alunasIds())) {
-      FichaInscricao ficha =
-          inscricoes.findFirstByUserIdAndStatus(userId, StatusInscricao.APROVADA).orElse(null);
-      if (ficha == null) {
-        recusadas.add(
-            Map.of("user_id", userId, "motivo", "A aluna precisa ter inscrição aprovada."));
-        continue;
-      }
-      if (turma.getId().equals(ficha.getTurmaId())) {
-        jaNaTurma.add(userId);
-        continue;
-      }
-      if (!nucleo.getCodigo().equals(ficha.getTurma())) {
-        recusadas.add(
-            Map.of(
-                "user_id", userId,
-                "nome", ficha.getNomeCompleto(),
-                "motivo", ficha.getNomeCompleto() + " pertence a outro núcleo."));
-        continue;
-      }
-      if (turma.getCapacidade() != null && ocupadas >= turma.getCapacidade()) {
-        recusadas.add(
-            Map.of(
-                "user_id", userId,
-                "nome", ficha.getNomeCompleto(),
-                "motivo",
-                    "A turma " + turma.getNome() + " atingiu a capacidade de " + turma.getCapacidade() + "."));
-        continue;
-      }
-
-      ficha.setTurmaId(turma.getId());
-      inscricoes.save(ficha);
-      usuarios
-          .findById(userId)
-          .ifPresent(
-              aluna -> {
-                aluna.setTurmaId(turma.getId());
-                aluna.setNucleoId(turma.getNucleoId());
-                usuarios.save(aluna);
-              });
-      ocupadas++;
-      alocadas.add(userId);
-    }
-
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("turma_id", turma.getId());
-    body.put("alocadas", alocadas);
-    body.put("ja_na_turma", jaNaTurma);
-    body.put("recusadas", recusadas);
-    return body;
-  }
-
-  @DeleteMapping("/{id}/alunas/{userId}")
-  @Transactional
-  public ResponseEntity<Void> desalocarAluna(
-      @PathVariable String id, @PathVariable String userId) {
-    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
-    carregar(id);
-    FichaInscricao ficha =
-        inscricoes
-            .findFirstByUserIdOrderByCreatedDesc(userId)
-            .filter(f -> id.equals(f.getTurmaId()))
-            .orElseThrow(
-                () ->
-                    new ApiException(
-                        HttpStatus.NOT_FOUND, "not_found", "Aluna não está alocada nesta turma."));
-    ficha.setTurmaId(null);
-    inscricoes.save(ficha);
-    usuarios
-        .findById(userId)
-        .ifPresent(
-            aluna -> {
-              if (id.equals(aluna.getTurmaId())) {
-                aluna.setTurmaId(null);
-                usuarios.save(aluna);
-              }
-            });
-    return ResponseEntity.noContent().build();
-  }
+  // A alocação manual de aluna deixou de existir: cada núcleo tem uma única turma e a aluna
+  // aprovada entra nela automaticamente (ver vincularAlunasDoNucleo e a aprovação da inscrição).
 
   // ---------------------------------------------------------------- apoio
 

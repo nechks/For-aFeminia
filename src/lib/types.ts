@@ -60,6 +60,7 @@ export interface FichaInscricaoFF {
   // Perfil da candidata, coletado na inscrição — é o que a gestão analisa antes de aprovar.
   genero?: string
   orientacao_sexual?: string
+  orientacao_sexual_outro?: string
   cor_raca?: string
   pcd?: string
   tipos_deficiencia?: string
@@ -194,6 +195,10 @@ export interface Atendimento {
 export interface DashboardData {
   nome: string
   turma: string
+  dataPrimeiraAula?: string | null
+  horarioInicio?: string | null
+  horarioFim?: string | null
+  localAula?: string | null
   totalAulas: number
   aulasAssistidas: number
   percentualFrequencia: number

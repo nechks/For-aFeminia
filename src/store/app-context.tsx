@@ -55,36 +55,49 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [minhaConfirmacao, setMinhaConfirmacao] = useState<any>(null)
   const [inscricoesLoaded, setInscricoesLoaded] = useState(false)
   const [confirmacaoLoaded, setConfirmacaoLoaded] = useState(false)
+  // Inscrição e ficha de confirmação aqui só servem para o acesso da aluna. Para a equipe, buscar
+  // isso a cada 10 s baixava a lista inteira de inscrições à toa.
+  const ehAluna = user?.perfil === 'ALUNA_FF'
 
   const loadInscricoes = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !ehAluna) {
       setInscricoes([])
       return
     }
     try {
-      const records = await getInscricoes()
-      setInscricoes(records as unknown as FichaInscricaoFF[])
+      const records = (await getInscricoes()) as unknown as FichaInscricaoFF[]
+      // Só troca o estado quando os dados mudaram de fato. O polling roda a cada 10s e, com um
+      // array novo a cada ciclo, todo componente que usa `useApp()` re-renderizava à toa —
+      // era isso que deixava a interface inteira "piscando".
+      setInscricoes((atuais) =>
+        JSON.stringify(atuais) === JSON.stringify(records) ? atuais : records,
+      )
     } catch (err) {
       console.error('Failed to load inscricoes:', err)
     } finally {
       setInscricoesLoaded(true)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, ehAluna])
 
   useEffect(() => {
     loadInscricoes()
   }, [loadInscricoes])
 
   const loadMinhaConfirmacao = useCallback(async () => {
-    if (!isAuthenticated || !user) {
+    if (!isAuthenticated || !user || user.perfil !== 'ALUNA_FF') {
       setMinhaConfirmacao(null)
       return
     }
     try {
       const result = await getMinhaConfirmacao(user.id)
-      setMinhaConfirmacao(result)
-    } catch {
-      setMinhaConfirmacao(null)
+      setMinhaConfirmacao((atual: unknown) =>
+        JSON.stringify(atual) === JSON.stringify(result) ? atual : result,
+      )
+    } catch (err) {
+      // Mantém a última ficha conhecida. Esta consulta se repete a cada ciclo do polling, e
+      // apagar o estado a cada falha momentânea fechava o acesso de quem já entregou a ficha,
+      // devolvendo a aluna ao formulário no meio da navegação.
+      console.error('Falha ao consultar a ficha de confirmação; mantendo o estado atual.', err)
     } finally {
       setConfirmacaoLoaded(true)
     }
@@ -99,7 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => {
       loadInscricoes()
     },
-    isAuthenticated,
+    isAuthenticated && ehAluna,
   )
 
   useRealtime(
@@ -107,7 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => {
       loadMinhaConfirmacao()
     },
-    isAuthenticated,
+    isAuthenticated && ehAluna,
   )
 
   const login = async (email: string, password: string) => signIn(email, password)

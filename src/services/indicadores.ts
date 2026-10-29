@@ -29,6 +29,10 @@ export interface IndicadorTurma {
   faltas_sem_justificativa: number
 }
 
+/** Só os gráficos socioeconômicos (contagens agregadas), também liberados à Assistente Social. */
+export const getSocioeconomico = () =>
+  api.get<IndicadoresData['socioeconomicDistribution']>('/api/indicadores/socioeconomico')
+
 export const getIndicadores = async (): Promise<IndicadoresData> => {
   return api.get<IndicadoresData>('/api/indicadores/dashboard')
 }

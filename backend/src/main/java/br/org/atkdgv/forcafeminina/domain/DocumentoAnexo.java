@@ -25,7 +25,8 @@ public class DocumentoAnexo {
   @Column(nullable = false, length = 36)
   private String confirmacaoId;
 
-  @Column(nullable = false, length = 10)
+  // Precisa comportar COMPROVANTE_RESIDENCIA (22 caracteres).
+  @Column(nullable = false, length = 40)
   private String tipo;
 
   @Column(nullable = false)

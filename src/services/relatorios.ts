@@ -120,20 +120,18 @@ export const exportarAtendimentosExcel = async (
 export interface ColunaNucleo { chave: string; rotulo: string }
 export interface DadosNucleo { colunas: ColunaNucleo[]; linhas: Record<string, string | number>[] }
 
-const parametrosNucleo = (turma: string, campos: string[], inicio: string, termino: string) => {
+const parametrosNucleo = (turma: string, campos: string[]) => {
   const params = new URLSearchParams({ turma })
   campos.forEach((campo) => params.append('campos', campo))
-  if (inicio) params.set('inicioProjeto', inicio)
-  if (termino) params.set('terminoProjeto', termino)
   return params.toString()
 }
 
-export const getDadosNucleo = (turma: string, campos: string[], inicio: string, termino: string) =>
-  api.get<DadosNucleo>(`/api/relatorios/nucleo?${parametrosNucleo(turma, campos, inicio, termino)}`)
+export const getDadosNucleo = (turma: string, campos: string[]) =>
+  api.get<DadosNucleo>(`/api/relatorios/nucleo?${parametrosNucleo(turma, campos)}`)
 
-export const exportarDadosNucleo = async (turma: string, campos: string[], inicio: string, termino: string) => {
+export const exportarDadosNucleo = async (turma: string, campos: string[]) => {
   const base = import.meta.env.VITE_API_URL ?? 'http://localhost:8085'
-  const res = await fetch(`${base}/api/relatorios/nucleo/export?${parametrosNucleo(turma, campos, inicio, termino)}`, { headers: { Authorization: `Bearer ${authStore.token}` } })
+  const res = await fetch(`${base}/api/relatorios/nucleo/export?${parametrosNucleo(turma, campos)}`, { headers: { Authorization: `Bearer ${authStore.token}` } })
   if (!res.ok) throw new Error('Erro ao exportar os dados do núcleo.')
   const blob = await res.blob()
   const url = URL.createObjectURL(blob)

@@ -10,6 +10,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: '::',
     port: 8080,
+    // O backend não é código do frontend. Vigiar backend/target derrubava o Vite com EBUSY
+    // quando o Maven travava arquivos durante os testes.
+    watch: {
+      ignored: ['**/backend/**'],
+    },
   },
   build: {
     outDir: mode === 'development' ? 'dev-dist' : 'dist',

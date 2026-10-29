@@ -1,9 +1,13 @@
 package br.org.atkdgv.forcafeminina.web;
 
+import br.org.atkdgv.forcafeminina.domain.Perfil;
 import br.org.atkdgv.forcafeminina.domain.Solicitacao;
+import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.SolicitacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
+import br.org.atkdgv.forcafeminina.service.ContaProfissionalService;
 import br.org.atkdgv.forcafeminina.service.FileStorageService;
+import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,9 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Cadastro público de professor (ficha da equipe). Diferente da inscrição da aluna, a conta NÃO é
- * criada aqui: o cadastro vira uma {@link Solicitacao} pendente e a Gestão Geral é quem aprova,
- * definindo o núcleo do professor no momento da aprovação (ver {@link SolicitacaoController}).
+ * Cadastro de profissional da equipe (professor, assistente social ou administrativo), com o tipo
+ * escolhido no formulário. Duas portas: o autocadastro público, que vira uma {@link Solicitacao}
+ * pendente aprovada em Solicitações, e o cadastro feito pela Gestão, em que a conta já nasce criada.
  */
 @RestController
 public class CadastroProfessorController {
@@ -48,13 +52,16 @@ public class CadastroProfessorController {
   private final PasswordEncoder passwordEncoder;
   private final FileStorageService files;
   private final ObjectMapper objectMapper;
+  private final ContaProfissionalService contas;
 
   public CadastroProfessorController(
       SolicitacaoRepository solicitacoes,
       UsuarioRepository usuarios,
       PasswordEncoder passwordEncoder,
       FileStorageService files,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ContaProfissionalService contas) {
+    this.contas = contas;
     this.solicitacoes = solicitacoes;
     this.usuarios = usuarios;
     this.passwordEncoder = passwordEncoder;
@@ -62,6 +69,7 @@ public class CadastroProfessorController {
     this.objectMapper = objectMapper;
   }
 
+  /** Autocadastro público: vira solicitação pendente, aprovada depois em Solicitações. */
   @PostMapping(value = "/api/cadastro-professor", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public ResponseEntity<Map<String, Object>> cadastrar(
       @RequestParam Map<String, String> params,
@@ -71,8 +79,68 @@ public class CadastroProfessorController {
       @RequestPart(value = "cartao_cnpj", required = false) MultipartFile cartaoCnpj,
       @RequestPart(value = "registro_conselho", required = false) MultipartFile registroConselho,
       @RequestPart(value = "contrato_social", required = false) MultipartFile contratoSocial) {
+    Solicitacao s =
+        montarSolicitacao(
+            params, rgCpfCnh, comprovante, curriculo, cartaoCnpj, registroConselho, contratoSocial);
+    // Auto-cadastro: não há solicitante logado; o próprio candidato é a referência.
+    s.setSolicitadoPor("");
+    s.setStatus("PENDENTE");
+    solicitacoes.save(s);
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("id", s.getId());
+    body.put("status", s.getStatus());
+    return ResponseEntity.status(HttpStatus.CREATED).body(body);
+  }
+
+  /**
+   * Cadastro feito pela própria Gestão Geral: mesmo formulário e mesmas validações do autocadastro,
+   * mas a conta já nasce criada e a solicitação fica registrada como aprovada por quem cadastrou —
+   * assim os dados e documentos ficam guardados no mesmo lugar dos cadastros aprovados.
+   */
+  @PostMapping(value = "/api/cadastro-profissional", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Transactional
+  public ResponseEntity<Map<String, Object>> cadastrarPelaGestao(
+      @RequestParam Map<String, String> params,
+      @RequestPart(value = "rg_cpf_cnh", required = false) MultipartFile rgCpfCnh,
+      @RequestPart(value = "comprovante_residencia", required = false) MultipartFile comprovante,
+      @RequestPart(value = "curriculo", required = false) MultipartFile curriculo,
+      @RequestPart(value = "cartao_cnpj", required = false) MultipartFile cartaoCnpj,
+      @RequestPart(value = "registro_conselho", required = false) MultipartFile registroConselho,
+      @RequestPart(value = "contrato_social", required = false) MultipartFile contratoSocial) {
+    Usuario gestao = CurrentUser.require(Perfil.GESTAO_GERAL);
+    Solicitacao s =
+        montarSolicitacao(
+            params, rgCpfCnh, comprovante, curriculo, cartaoCnpj, registroConselho, contratoSocial);
+    Usuario conta = contas.criarConta(s, contas.perfilDoCadastro(s), null);
+    s.setSolicitadoPor(gestao.getId());
+    s.setStatus("APROVADA");
+    s.setAnalisadoPor(gestao.getId());
+    solicitacoes.save(s);
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("id", s.getId());
+    body.put("status", s.getStatus());
+    body.put("user_id", conta.getId());
+    body.put("perfil", conta.getPerfil());
+    return ResponseEntity.status(HttpStatus.CREATED).body(body);
+  }
+
+  /** Valida o formulário, guarda os documentos e monta a solicitação (ainda sem status). */
+  private Solicitacao montarSolicitacao(
+      Map<String, String> params,
+      MultipartFile rgCpfCnh,
+      MultipartFile comprovante,
+      MultipartFile curriculo,
+      MultipartFile cartaoCnpj,
+      MultipartFile registroConselho,
+      MultipartFile contratoSocial) {
 
     Map<String, String> errors = new LinkedHashMap<>();
+    String perfil = params.getOrDefault("perfil", "").trim();
+    if (ContaProfissionalService.PERFIS_DO_CADASTRO.stream().noneMatch(p -> p.name().equals(perfil))) {
+      errors.put("perfil", "Escolha o tipo de profissional");
+    }
     for (String campo : OBRIGATORIOS) {
       String v = params.get(campo);
       if (v == null || v.isBlank()) errors.put(campo, "Campo obrigatório");
@@ -124,6 +192,7 @@ public class CadastroProfessorController {
             "Chave pix: " + params.get("chave_pix").trim()));
     dados.put("cpf", cpf);
     dados.put("email", email);
+    dados.put("perfil", perfil);
 
     Map<String, String> documentos = new LinkedHashMap<>();
     try {
@@ -150,16 +219,8 @@ public class CadastroProfessorController {
       throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "Dados inválidos.");
     }
     s.setSenhaHash(passwordEncoder.encode(senha));
-    // Auto-cadastro: não há solicitante logado; o próprio candidato é a referência.
-    s.setSolicitadoPor("");
     s.setSolicitadoPorNome(params.get("nome_completo").trim());
-    s.setStatus("PENDENTE");
-    solicitacoes.save(s);
-
-    Map<String, Object> body = new LinkedHashMap<>();
-    body.put("id", s.getId());
-    body.put("status", s.getStatus());
-    return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    return s;
   }
 
   private static boolean isEmpty(MultipartFile f) {

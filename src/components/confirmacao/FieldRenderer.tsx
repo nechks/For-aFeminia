@@ -262,9 +262,7 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     return (
       <div className="space-y-3">
         <Label className={labelClass}>{field.label}</Label>
-        <p className="text-xs text-muted-foreground">
-          Selecione todos os bens que a família possui.
-        </p>
+        {field.hint && <p className="text-xs text-muted-foreground">{field.hint}</p>}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {opcoes.map((item) => {
             const marcado = selecionados.includes(item)

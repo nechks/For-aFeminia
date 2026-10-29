@@ -17,6 +17,7 @@ import {
 import { FichaInscricaoFF } from '@/lib/types'
 import { turmaLabels } from '@/lib/constants'
 import { campoLabels, documentoLabels, projetoLabel } from '@/lib/equipe-form'
+import { TIPOS_PROFISSIONAL } from '@/services/cadastro-professor'
 import { getErrorMessage } from '@/lib/api/errors'
 import { fileUrl } from '@/lib/api/client'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -45,6 +46,7 @@ import {
   CheckCircle2,
   FileText,
   GraduationCap,
+  Hourglass,
   Inbox,
   Loader2,
   Search,
@@ -52,6 +54,23 @@ import {
   XCircle,
 } from 'lucide-react'
 import { InscricaoDetailDialog } from '@/components/admin/InscricaoDetailDialog'
+import { CRITERIO_ZONA } from '@/lib/pontuacao'
+
+/**
+ * Faixas do filtro de pontuação. Pela regra 80/20 (lib/pontuacao), quem mora na zona prioritária
+ * do núcleo fica sempre com 80 ou mais e quem não mora com 20 ou menos, então as faixas separam
+ * primeiro por zona e depois pelos demais critérios.
+ */
+const FAIXAS_PONTUACAO = {
+  ALL: { rotulo: 'Todas as pontuações', min: 0, max: 100 },
+  '90-100': { rotulo: '90 a 100 — zona e vários critérios', min: 90, max: 100 },
+  '80-89': { rotulo: '80 a 89 — zona prioritária', min: 80, max: 89 },
+  '0-79': { rotulo: 'Abaixo de 80 — fora da zona', min: 0, max: 79 },
+} as const
+type FaixaPontuacao = keyof typeof FAIXAS_PONTUACAO
+
+const dentroDaFaixa = (pontos: number, faixa: FaixaPontuacao) =>
+  pontos >= FAIXAS_PONTUACAO[faixa].min && pontos <= FAIXAS_PONTUACAO[faixa].max
 
 const TIPO_PROFESSOR = 'CADASTRO_PROFESSOR'
 const TIPO_ALUNA = 'CRIACAO_ALUNA'
@@ -86,6 +105,7 @@ const tipoLabel: Record<string, string> = {
 
 // Ordem e agrupamento dos campos no detalhe do professor.
 const camposDetalhe: string[] = [
+  'perfil',
   'nome_completo',
   'email',
   'telefone',
@@ -107,6 +127,10 @@ const camposDetalhe: string[] = [
   'servico_prestado',
 ]
 
+/** Tipo escolhido no cadastro de equipe. Cadastros antigos, sem a escolha, eram de professor. */
+const tipoProfissionalDoCadastro = (perfil: unknown) =>
+  TIPOS_PROFISSIONAL.find(([valor]) => valor === perfil)?.[1] ?? 'Professor(a)'
+
 interface DadosProfessor {
   documentos?: Record<string, string>
   [key: string]: unknown
@@ -124,6 +148,7 @@ export default function Solicitacoes() {
   const { user } = useApp()
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [inscricoesPendentes, setInscricoesPendentes] = useState<FichaInscricaoFF[]>([])
+  const [listaEspera, setListaEspera] = useState<FichaInscricaoFF[]>([])
   const [nucleos, setNucleos] = useState<Nucleo[]>([])
   const [resumosNucleos, setResumosNucleos] = useState<NucleoResumo[]>([])
   const [nucleoSelecionado, setNucleoSelecionado] = useState('')
@@ -144,25 +169,37 @@ export default function Solicitacoes() {
   // Filtros
   const [filtroTipo, setFiltroTipo] = useState('ALL')
   const [filtroStatus, setFiltroStatus] = useState('ALL')
-  const [filtroBairro, setFiltroBairro] = useState('ALL')
+  const [filtroPontuacao, setFiltroPontuacao] = useState<FaixaPontuacao>('ALL')
 
   const isGestao = user?.perfil === 'GESTAO_GERAL'
   const isAdministrativo = user?.perfil === 'ADMINISTRATIVO'
   const isAssistente = user?.perfil === 'ASSISTENTE_SOCIAL'
-  // A análise e a decisão da inscrição pertencem exclusivamente ao Administrativo.
-  const podeAprovarInscricao = user?.perfil === 'ADMINISTRATIVO'
+  // Administrativo e Gestão Geral decidem a inscrição (aprovar, lista de espera, vaga da criança).
+  const podeAprovarInscricao = isAdministrativo || isGestao
 
   const load = useCallback(async () => {
-    const [solicitacoesResult, inscricoesResult, nucleosResult, resumosResult] =
+    const [solicitacoesResult, inscricoesResult, nucleosResult, resumosResult, esperaResult] =
       await Promise.allSettled([
         getSolicitacoes(),
         getInscricoesPaginated({ status: 'AGUARDANDO', perPage: 200 }),
         getNucleos(),
         getNucleosResumo(),
+        getInscricoesPaginated({ status: 'LISTA_ESPERA', perPage: 500 }),
       ])
+
+    if (esperaResult.status === 'fulfilled') {
+      setListaEspera(esperaResult.value.items)
+    } else {
+      console.error('Failed to load lista de espera:', esperaResult.reason)
+    }
 
     if (solicitacoesResult.status === 'fulfilled') {
       setSolicitacoes(solicitacoesResult.value)
+      // Cadastro de equipe não tem núcleo; sem esta seleção automática ele ficava escondido
+      // atrás do filtro até alguém escolher "Cadastros de equipe" por conta própria.
+      if (solicitacoesResult.value.some((s) => !s.nucleo)) {
+        setNucleoSelecionado((atual) => atual || NUCLEO_GERAL)
+      }
     } else {
       console.error('Failed to load solicitacoes:', solicitacoesResult.reason)
     }
@@ -195,16 +232,10 @@ export default function Solicitacoes() {
     load()
   }, [load])
 
+  // Um único ciclo: dois hooks chamando o mesmo `load` duplicavam todas as requisições da tela.
   useRealtime('solicitacoes', () => {
     load()
   })
-  useRealtime('ficha_inscricao_ff', () => {
-    load()
-  })
-
-  useEffect(() => {
-    setFiltroBairro('ALL')
-  }, [nucleoSelecionado])
 
   // Aplicação dos filtros (client-side sobre o que já veio do backend por perfil).
   const mostrarInscricoes =
@@ -235,44 +266,57 @@ export default function Solicitacoes() {
 
   const nucleoAtual = nucleos.find((n) => n.codigo === nucleoSelecionado)
 
-  const bairrosParaFiltro = useMemo(
-    () =>
-      [...new Set(
-        inscricoesPendentes
-          .filter((inscricao) => inscricao.turma === nucleoSelecionado && inscricao.bairro?.trim())
-          .map((inscricao) => (inscricao.bairro ?? '').trim()),
-      )].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    [inscricoesPendentes, nucleoSelecionado],
-  )
-
   const inscricoesFiltradas = useMemo(() => {
     if (!mostrarInscricoes || !nucleoSelecionado || nucleoSelecionado === NUCLEO_GERAL) return []
     return inscricoesPendentes
       .filter(
         (inscricao) =>
           inscricao.turma === nucleoSelecionado &&
-          (filtroBairro === 'ALL' ||
-            normalizarBairro(inscricao.bairro) === normalizarBairro(filtroBairro)),
+          dentroDaFaixa(inscricao.pontuacao_prioridade ?? 0, filtroPontuacao),
       )
       .sort((a, b) => {
         const pontosA = a.pontuacao_prioridade ?? 0
         const pontosB = b.pontuacao_prioridade ?? 0
         if (pontosA !== pontosB) return pontosB - pontosA
-        // A avaliação do relato é humana; a data apenas mantém uma ordem estável enquanto o
-        // Administrativo decide o desempate.
+        // Empate de pontos: a data só mantém a ordem estável. O relato para o desempate humano
+        // fica no botão "Analisar".
         return String(b.created ?? '').localeCompare(String(a.created ?? ''))
       })
   }, [
-    filtroBairro,
+    filtroPontuacao,
     inscricoesPendentes,
     mostrarInscricoes,
     nucleoAtual,
     nucleoSelecionado,
   ])
 
+  const mostrarEspera =
+    (filtroTipo === 'ALL' || filtroTipo === 'INSCRICAO') &&
+    (filtroStatus === 'ALL' || filtroStatus === 'LISTA_ESPERA')
+
+  /**
+   * Fila da lista de espera do núcleo: maior pontuação primeiro e, no empate, quem se inscreveu
+   * antes — numa fila, esperar mais conta. A posição mostrada é a da fila inteira do núcleo, mesmo
+   * com o filtro de pontuação ligado, para não parecer que alguém "subiu" só por causa do filtro.
+   */
+  const filaEspera = useMemo(() => {
+    if (!mostrarEspera || !nucleoSelecionado || nucleoSelecionado === NUCLEO_GERAL) return []
+    return listaEspera
+      .filter((inscricao) => inscricao.turma === nucleoSelecionado)
+      .sort((a, b) => {
+        const pontosA = a.pontuacao_prioridade ?? 0
+        const pontosB = b.pontuacao_prioridade ?? 0
+        if (pontosA !== pontosB) return pontosB - pontosA
+        return String(a.created ?? '').localeCompare(String(b.created ?? ''))
+      })
+      .map((inscricao, indice) => ({ inscricao, posicao: indice + 1 }))
+      .filter(({ inscricao }) => dentroDaFaixa(inscricao.pontuacao_prioridade ?? 0, filtroPontuacao))
+  }, [filtroPontuacao, listaEspera, mostrarEspera, nucleoSelecionado])
+
   const totalPorNucleo = (codigo: string) =>
     solicitacoes.filter((s) => s.nucleo === codigo).length +
-    inscricoesPendentes.filter((i) => i.turma === codigo).length
+    inscricoesPendentes.filter((i) => i.turma === codigo).length +
+    listaEspera.filter((i) => i.turma === codigo).length
 
   const totalGeral = solicitacoes.filter((s) => !s.nucleo).length
 
@@ -351,7 +395,10 @@ export default function Solicitacoes() {
   }
 
   const semResultados =
-    !!nucleoSelecionado && solicitacoesFiltradas.length === 0 && inscricoesFiltradas.length === 0
+    !!nucleoSelecionado &&
+    solicitacoesFiltradas.length === 0 &&
+    inscricoesFiltradas.length === 0 &&
+    filaEspera.length === 0
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -407,6 +454,7 @@ export default function Solicitacoes() {
               <SelectItem value="PENDENTE">Pendente</SelectItem>
               <SelectItem value="APROVADA">Aprovada</SelectItem>
               <SelectItem value="RECUSADA">Recusada</SelectItem>
+              <SelectItem value="LISTA_ESPERA">Lista de espera</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -424,27 +472,26 @@ export default function Solicitacoes() {
                   {nucleo.nome} ({totalPorNucleo(nucleo.codigo)})
                 </SelectItem>
               ))}
-              <SelectItem value={NUCLEO_GERAL}>Sem núcleo definido ({totalGeral})</SelectItem>
+              <SelectItem value={NUCLEO_GERAL}>Cadastros de equipe ({totalGeral})</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="filtro-bairro" className="text-xs text-muted-foreground">
-            Bairro
+          <Label htmlFor="filtro-pontuacao" className="text-xs text-muted-foreground">
+            Pontuação
           </Label>
           <Select
-            value={filtroBairro}
-            onValueChange={setFiltroBairro}
-            disabled={!nucleoAtual || bairrosParaFiltro.length === 0}
+            value={filtroPontuacao}
+            onValueChange={(v) => setFiltroPontuacao(v as FaixaPontuacao)}
+            disabled={!nucleoAtual}
           >
-            <SelectTrigger id="filtro-bairro" className="w-full">
-              <SelectValue placeholder="Todos os bairros" />
+            <SelectTrigger id="filtro-pontuacao" className="w-full">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todos os bairros</SelectItem>
-              {bairrosParaFiltro.map((bairro) => (
-                <SelectItem key={bairro} value={bairro}>
-                  {bairro}
+              {(Object.keys(FAIXAS_PONTUACAO) as FaixaPontuacao[]).map((faixa) => (
+                <SelectItem key={faixa} value={faixa}>
+                  {FAIXAS_PONTUACAO[faixa].rotulo}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -520,7 +567,9 @@ export default function Solicitacoes() {
                           </Badge>
                           <Badge variant="outline" className="font-semibold">
                             {i.pontuacao_prioridade ?? 0} pontos ·{' '}
-                            {i.criterios_prioridade?.length ?? 0}/10 com valor integral
+                            {i.criterios_prioridade?.includes(CRITERIO_ZONA)
+                              ? 'zona prioritária'
+                              : 'fora da zona prioritária'}
                           </Badge>
                           {zonaDoBairro(i, nucleoAtual) && (
                             <Badge
@@ -544,14 +593,6 @@ export default function Solicitacoes() {
                             ? `zona ${zonaDoBairro(i, nucleoAtual)?.nome}`
                             : 'fora das zonas prioritárias'}
                         </p>
-                        <div className="max-w-2xl rounded-md bg-muted/40 p-3 text-sm">
-                          <p className="mb-1 text-xs font-medium text-muted-foreground">
-                            Relato para desempate
-                          </p>
-                          <p className="line-clamp-3 whitespace-pre-wrap">
-                            {i.motivo_participar || 'Sem relato informado'}
-                          </p>
-                        </div>
                         <p className="text-xs text-muted-foreground">
                           Inscrita em{' '}
                           {i.created ? new Date(i.created).toLocaleDateString('pt-BR') : '—'}
@@ -607,6 +648,77 @@ export default function Solicitacoes() {
             </div>
           )}
 
+          {filaEspera.length > 0 && (
+            <div className="space-y-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <Hourglass className="h-5 w-5 text-primary" /> Lista de espera ({filaEspera.length})
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Em ordem de prioridade: maior pontuação primeiro e, no empate, quem se inscreveu
+                  antes. Quando abrir vaga, chame a primeira da fila.
+                </p>
+              </div>
+              {filaEspera.map(({ inscricao: i, posicao }) => (
+                <Card key={i.id}>
+                  <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                          posicao === 1
+                            ? 'bg-laranja text-laranja-foreground'
+                            : 'bg-secondary text-secondary-foreground'
+                        }`}
+                        aria-label={`Posição ${posicao} na fila`}
+                      >
+                        {posicao}º
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold">{i.nome_completo}</span>
+                          <Badge variant="outline" className="font-semibold">
+                            {i.pontuacao_prioridade ?? 0} pontos ·{' '}
+                            {i.criterios_prioridade?.includes(CRITERIO_ZONA)
+                              ? 'zona prioritária'
+                              : 'fora da zona prioritária'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          <strong>Bairro:</strong> {i.bairro || 'Não informado'} ·{' '}
+                          <strong>Horário escolhido:</strong> {i.horario_preferido || 'Não informado'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Inscrita em{' '}
+                          {i.created ? new Date(i.created).toLocaleDateString('pt-BR') : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <Button variant="outline" className="gap-1.5" onClick={() => setInscricaoDetalhe(i)}>
+                        <Search className="h-4 w-4" /> Analisar
+                      </Button>
+                      {podeAprovarInscricao && (
+                        <Button
+                          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                          disabled={analisando === i.id || nucleoLotado}
+                          title={nucleoLotado ? 'O núcleo não tem vagas disponíveis' : undefined}
+                          onClick={() => handleInscricao(i.id, true)}
+                        >
+                          {analisando === i.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                          )}
+                          {nucleoLotado ? 'Sem vaga' : 'Aprovar'}
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
           {solicitacoesFiltradas.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -627,6 +739,9 @@ export default function Solicitacoes() {
                             <Badge className={badge.color} variant="secondary">
                               {badge.label}
                             </Badge>
+                            {ehProfessor && (
+                              <Badge variant="outline">{tipoProfissionalDoCadastro(dados.perfil)}</Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             <strong>{String(dados.nome_completo ?? dados.name ?? '—')}</strong> ·{' '}
@@ -791,6 +906,11 @@ export default function Solicitacoes() {
           if (!aberto) setInscricaoDetalhe(null)
         }}
         podeDecidirVagaCrianca={podeAprovarInscricao}
+        podeDecidirInscricao={podeAprovarInscricao}
+        decidindo={!!inscricaoDetalhe && analisando === inscricaoDetalhe.id}
+        nucleoLotado={nucleoLotado}
+        onAprovar={() => inscricaoDetalhe && handleInscricao(inscricaoDetalhe.id, true)}
+        onListaEspera={() => inscricaoDetalhe && handleInscricao(inscricaoDetalhe.id, false)}
       />
     </div>
   )
@@ -832,7 +952,11 @@ function ProfessorDialog({
               const valor = dados[campo]
               if (valor === undefined || valor === null || valor === '') return null
               const texto =
-                campo === 'projeto_contratante' ? projetoLabel(String(valor)) : String(valor)
+                campo === 'projeto_contratante'
+                  ? projetoLabel(String(valor))
+                  : campo === 'perfil'
+                    ? tipoProfissionalDoCadastro(valor)
+                    : String(valor)
               const largo =
                 campo === 'endereco_residencial' ||
                 campo === 'endereco_comercial' ||

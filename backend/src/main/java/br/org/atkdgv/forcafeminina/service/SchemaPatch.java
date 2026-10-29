@@ -30,6 +30,7 @@ public class SchemaPatch implements CommandLineRunner {
   public void run(String... args) {
     transformarZonasEmCadastroGlobal();
     alargarReferenciaDaNotificacao();
+    alargarTipoDoDocumentoAnexo();
     dropIndiceUnicoAntigoDePresenca();
     horarioDasTurmasLegadas();
     backfillPresenca();
@@ -38,6 +39,71 @@ public class SchemaPatch implements CommandLineRunner {
     migrarProjetoDoProfissional();
     backfillAcessoDaAluna();
     liberarFichaDeConfirmacaoPorCiclo();
+    unificarNotaDaAutoavaliacao();
+  }
+
+  /**
+   * A avaliação tinha duas notas — a da professora e a autoavaliação da aluna. Como quem se dá a
+   * nota é a aluna e a professora apenas registra o valor informado por ela, sobrou uma nota só:
+   * {@code nota_autoavaliacao}. A nota antiga da professora vira a autoavaliação onde a aluna
+   * ainda não tinha preenchido a dela.
+   */
+  private void unificarNotaDaAutoavaliacao() {
+    if (!tabelaExiste("avaliacoes_aluna")) return;
+    if (colunaExiste("avaliacoes_aluna", "nota_professora")) {
+      try {
+        int migradas =
+            jdbc.update(
+                "UPDATE avaliacoes_aluna SET nota_autoavaliacao = nota_professora "
+                    + "WHERE nota_autoavaliacao IS NULL");
+        jdbc.execute("ALTER TABLE avaliacoes_aluna DROP COLUMN nota_professora");
+        log.info(
+            "SchemaPatch: nota_professora removida de avaliacoes_aluna; {} nota(s) migrada(s) para"
+                + " nota_autoavaliacao.",
+            migradas);
+      } catch (Exception e) {
+        log.warn(
+            "SchemaPatch: não foi possível unificar a nota da avaliação ({}). Enquanto"
+                + " nota_professora existir como NOT NULL, registrar avaliações vai falhar.",
+            e.getMessage());
+        return;
+      }
+    }
+    if (colunaExiste("avaliacoes_aluna", "autoavaliada_em")) {
+      try {
+        jdbc.execute("ALTER TABLE avaliacoes_aluna DROP COLUMN autoavaliada_em");
+        log.info("SchemaPatch: autoavaliada_em removida de avaliacoes_aluna.");
+      } catch (Exception e) {
+        log.warn("SchemaPatch: não foi possível remover autoavaliada_em ({}).", e.getMessage());
+      }
+    }
+    // A nota passou a ser obrigatória; o ddl-auto=update não troca a nulidade de colunas existentes.
+    if (colunaAceitaNulo("avaliacoes_aluna", "nota_autoavaliacao")) {
+      try {
+        jdbc.execute(
+            "ALTER TABLE avaliacoes_aluna MODIFY nota_autoavaliacao DOUBLE NOT NULL");
+        log.info("SchemaPatch: avaliacoes_aluna.nota_autoavaliacao agora é NOT NULL.");
+      } catch (Exception e) {
+        log.warn(
+            "SchemaPatch: não foi possível tornar nota_autoavaliacao obrigatória ({}).",
+            e.getMessage());
+      }
+    }
+  }
+
+  private boolean colunaAceitaNulo(String tabela, String coluna) {
+    try {
+      String nulo =
+          jdbc.queryForObject(
+              "SELECT is_nullable FROM information_schema.columns "
+                  + "WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?",
+              String.class,
+              tabela,
+              coluna);
+      return "YES".equalsIgnoreCase(nulo);
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   /**
@@ -229,12 +295,45 @@ public class SchemaPatch implements CommandLineRunner {
     }
   }
 
+  /**
+   * O tipo {@code COMPROVANTE_RESIDENCIA} tem 22 caracteres. Bancos criados pela versão anterior
+   * mantêm a coluna em varchar(10), e o {@code ddl-auto=update} não aumenta colunas existentes.
+   */
+  private void alargarTipoDoDocumentoAnexo() {
+    Integer tamanho = tamanhoDaColuna("documentos_anexos", "tipo");
+    if (tamanho == null || tamanho >= 40) return;
+    try {
+      jdbc.execute("ALTER TABLE documentos_anexos MODIFY tipo VARCHAR(40) NOT NULL");
+      log.info(
+          "SchemaPatch: documentos_anexos.tipo alargada de varchar({}) para varchar(40).",
+          tamanho);
+    } catch (Exception e) {
+      log.warn(
+          "SchemaPatch: não foi possível alargar documentos_anexos.tipo ({}). "
+              + "O comprovante de residência não poderá ser salvo até isso ser corrigido.",
+          e.getMessage());
+    }
+  }
+
   private String tipoDaColuna(String tabela, String coluna) {
     try {
       return jdbc.queryForObject(
           "SELECT column_type FROM information_schema.columns "
               + "WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?",
           String.class,
+          tabela,
+          coluna);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private Integer tamanhoDaColuna(String tabela, String coluna) {
+    try {
+      return jdbc.queryForObject(
+          "SELECT character_maximum_length FROM information_schema.columns "
+              + "WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?",
+          Integer.class,
           tabela,
           coluna);
     } catch (Exception e) {

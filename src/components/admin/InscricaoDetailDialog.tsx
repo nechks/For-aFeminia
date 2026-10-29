@@ -1,8 +1,9 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { FichaInscricaoFF } from '@/lib/types'
-import { getStatusInfo, turmaLabels } from '@/lib/constants'
+import { formatarNucleo, getStatusInfo } from '@/lib/constants'
 import { PONTUACAO_MAXIMA, formatarPontos, pontosDoCriterio } from '@/lib/pontuacao'
 import VagaCriancaCard from '@/components/admin/VagaCriancaCard'
 import { Campo, SecaoDados } from '@/components/Dados'
@@ -17,6 +18,10 @@ import {
   MapPin,
   Quote,
   Target,
+  CheckCircle2,
+  Clock3,
+  Loader2,
+  XCircle,
 } from 'lucide-react'
 
 interface Props {
@@ -25,6 +30,13 @@ interface Props {
   onOpenChange: (open: boolean) => void
   /** Gestão e Administrativo decidem a vaga da criança; os demais perfis só visualizam. */
   podeDecidirVagaCrianca?: boolean
+  podeDecidirInscricao?: boolean
+  decidindo?: boolean
+  nucleoLotado?: boolean
+  onAprovar?: () => void
+  onListaEspera?: () => void
+  onMarcarAnalise?: () => void
+  onCancelar?: () => void
 }
 
 /** "Sim" + descrição vira "Sim — texto"; "Não" fica só "Não". */
@@ -49,6 +61,13 @@ export function InscricaoDetailDialog({
   open,
   onOpenChange,
   podeDecidirVagaCrianca = false,
+  podeDecidirInscricao = false,
+  decidindo = false,
+  nucleoLotado = false,
+  onAprovar,
+  onListaEspera,
+  onMarcarAnalise,
+  onCancelar,
 }: Props) {
   if (!inscricao) return null
   const status = getStatusInfo(inscricao.status)
@@ -57,6 +76,7 @@ export function InscricaoDetailDialog({
   const pontos = inscricao.pontuacao_prioridade ?? 0
   const atendidos = inscricao.criterios_prioridade ?? []
   const naoAtendidos = inscricao.criterios_nao_atendidos ?? []
+  const decisaoAberta = ['AGUARDANDO', 'EM_ANALISE', 'LISTA_ESPERA'].includes(inscricao.status)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -158,7 +178,10 @@ export function InscricaoDetailDialog({
 
           <SecaoDados titulo="Identidade e diversidade" icone={Heart}>
             <Campo rotulo="Gênero" valor={inscricao.genero} />
-            <Campo rotulo="Orientação sexual" valor={inscricao.orientacao_sexual} />
+            <Campo
+              rotulo="Orientação sexual"
+              valor={comDetalhe(inscricao.orientacao_sexual, inscricao.orientacao_sexual_outro)}
+            />
             <Campo rotulo="Cor ou raça/etnia" valor={inscricao.cor_raca} />
             <Campo
               rotulo="Pessoa com deficiência"
@@ -197,7 +220,7 @@ export function InscricaoDetailDialog({
           </SecaoDados>
 
           <SecaoDados titulo="Participação" icone={Target}>
-            <Campo rotulo="Núcleo" valor={turmaLabels[inscricao.turma ?? ''] ?? inscricao.turma} />
+            <Campo rotulo="Núcleo" valor={formatarNucleo(inscricao.turma)} />
             <Campo rotulo="Horário desejado" valor={inscricao.horario_preferido} />
             <Campo
               rotulo="Como conheceu o projeto"
@@ -278,6 +301,50 @@ export function InscricaoDetailDialog({
             </>
           )}
         </div>
+
+        {podeDecidirInscricao && decisaoAberta && (
+          <DialogFooter className="shrink-0 flex-col gap-2 border-t bg-card px-6 py-4 sm:flex-row sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {inscricao.status === 'AGUARDANDO' && onMarcarAnalise && (
+                <Button variant="outline" onClick={onMarcarAnalise} disabled={decidindo}>
+                  <Clock3 className="mr-2 h-4 w-4" /> Em análise
+                </Button>
+              )}
+              {onCancelar && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  onClick={onCancelar}
+                  disabled={decidindo}
+                >
+                  <XCircle className="mr-2 h-4 w-4" /> Cancelar inscrição
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {inscricao.status !== 'LISTA_ESPERA' && onListaEspera && (
+                <Button variant="outline" onClick={onListaEspera} disabled={decidindo}>
+                  <Clock3 className="mr-2 h-4 w-4" /> Lista de espera
+                </Button>
+              )}
+              {onAprovar && (
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={onAprovar}
+                  disabled={decidindo || nucleoLotado}
+                  title={nucleoLotado ? 'O núcleo não tem vagas disponíveis' : undefined}
+                >
+                  {decidindo ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                  )}
+                  {nucleoLotado ? 'Limite preenchido' : 'Aprovar vaga'}
+                </Button>
+              )}
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   )

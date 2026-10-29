@@ -2,6 +2,7 @@ package br.org.atkdgv.forcafeminina.web;
 
 import br.org.atkdgv.forcafeminina.domain.*;
 import br.org.atkdgv.forcafeminina.repo.*;
+import java.text.Normalizer;
 import java.time.*;
 import java.util.*;
 import org.springframework.http.*;
@@ -11,8 +12,8 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController @RequestMapping("/api/nucleos")
 public class NucleoController {
-  private final NucleoRepository nucleos; private final ProjetoRepository projetos; private final UsuarioRepository usuarios; private final FichaInscricaoRepository inscricoes; private final TurmaRepository turmas; private final TurmaEquipeRepository equipe; private final ZonaPrioritariaRepository zonas; private final NucleoZonaPrioritariaRepository vinculosZona; private final PasswordEncoder encoder;
-  public NucleoController(NucleoRepository n, ProjetoRepository p, UsuarioRepository u, FichaInscricaoRepository i, TurmaRepository t, TurmaEquipeRepository te, ZonaPrioritariaRepository z, NucleoZonaPrioritariaRepository vz, PasswordEncoder e){nucleos=n;projetos=p;usuarios=u;inscricoes=i;turmas=t;equipe=te;zonas=z;vinculosZona=vz;encoder=e;}
+  private final NucleoRepository nucleos; private final ProjetoRepository projetos; private final ProjetoProfissionalRepository profissionaisDoProjeto; private final UsuarioRepository usuarios; private final FichaInscricaoRepository inscricoes; private final TurmaRepository turmas; private final TurmaEquipeRepository equipe; private final ZonaPrioritariaRepository zonas; private final NucleoZonaPrioritariaRepository vinculosZona; private final PasswordEncoder encoder; private final br.org.atkdgv.forcafeminina.service.FuncaoNoNucleo funcaoNoNucleo;
+  public NucleoController(NucleoRepository n, ProjetoRepository p, ProjetoProfissionalRepository pp, UsuarioRepository u, FichaInscricaoRepository i, TurmaRepository t, TurmaEquipeRepository te, ZonaPrioritariaRepository z, NucleoZonaPrioritariaRepository vz, PasswordEncoder e, br.org.atkdgv.forcafeminina.service.FuncaoNoNucleo f){nucleos=n;projetos=p;profissionaisDoProjeto=pp;usuarios=u;inscricoes=i;turmas=t;equipe=te;zonas=z;vinculosZona=vz;encoder=e;funcaoNoNucleo=f;}
   @GetMapping public List<Nucleo> listar(){
     List<Nucleo> lista=nucleos.findAllByOrderByNomeAsc();
     lista.forEach(this::carregarZonas);
@@ -167,12 +168,21 @@ public class NucleoController {
     if(!projeto.isAtivo()) throw new ApiException(HttpStatus.BAD_REQUEST,"projeto_inativo","Selecione um projeto ativo.");
     if(n.getNome()==null||n.getNome().isBlank()) throw new ApiException(HttpStatus.BAD_REQUEST,"campos_obrigatorios","Informe o nome do núcleo.");
     validarCapacidadeDoProjeto(projeto,n.getCapacidade(),null);
-    String base=n.getNome().trim().toUpperCase().replaceAll("[^A-Z0-9]+","_").replaceAll("(^_|_$)","");
+    String base=normalizarCodigo(n.getNome());
     if(base.length()<3)base="NUCLEO"; if(base.length()>64)base=base.substring(0,64);
     String codigo=base; int sufixo=2; while(nucleos.existsByCodigo(codigo))codigo=base+"_"+(sufixo++);
     n.setCodigo(codigo); n.setNome(n.getNome().trim());
     n.setAtivo(true); nucleos.save(n);
     return ResponseEntity.status(HttpStatus.CREATED).body(n);
+  }
+
+  /** Mantém as letras acentuadas antes de limitar o código a A-Z/0-9. */
+  private static String normalizarCodigo(String nome){
+    return Normalizer.normalize(nome.trim(),Normalizer.Form.NFD)
+        .replaceAll("\\p{M}","")
+        .toUpperCase(Locale.ROOT)
+        .replaceAll("[^A-Z0-9]+","_")
+        .replaceAll("(^_|_$)","");
   }
   /** Edição do núcleo. Código e projeto não mudam: são a identidade dele para turmas e inscrições. */
   @PutMapping("/{id}") @Transactional
@@ -197,17 +207,39 @@ public class NucleoController {
     return carregarZonas(nucleos.save(n));
   }
 
+  /** Um profissional e a função que ele vai exercer na turma. */
+  public record VinculoItem(
+      @com.fasterxml.jackson.annotation.JsonProperty("user_id") String userId,
+      @com.fasterxml.jackson.annotation.JsonProperty("tipo_profissional") String tipoProfissional) {}
+
+  /**
+   * Aceita {@code vinculos} (uma função por pessoa) ou, no formato antigo, {@code profissionais_ids}
+   * com um único {@code tipo_profissional} para todos.
+   */
   public record VincularProfissionaisRequest(
       @com.fasterxml.jackson.annotation.JsonProperty("profissionais_ids") List<String> profissionaisIds,
       @com.fasterxml.jackson.annotation.JsonProperty("turma_id") String turmaId,
-      @com.fasterxml.jackson.annotation.JsonProperty("tipo_profissional") String tipoProfissional) {}
+      @com.fasterxml.jackson.annotation.JsonProperty("tipo_profissional") String tipoProfissional,
+      @com.fasterxml.jackson.annotation.JsonProperty("vinculos") List<VinculoItem> vinculos) {
+
+    /** Normaliza os dois formatos numa lista pessoa → função, sem repetir pessoa. */
+    List<VinculoItem> itens() {
+      Map<String, VinculoItem> porPessoa = new LinkedHashMap<>();
+      if (vinculos != null && !vinculos.isEmpty()) {
+        for (VinculoItem v : vinculos) if (v != null && v.userId() != null) porPessoa.put(v.userId(), v);
+      } else if (profissionaisIds != null) {
+        for (String id : profissionaisIds) if (id != null) porPessoa.put(id, new VinculoItem(id, tipoProfissional));
+      }
+      return new ArrayList<>(porPessoa.values());
+    }
+  }
 
   /**
    * Vincula vários profissionais ao núcleo de uma vez, no lugar de repetir o vínculo um a um.
    *
    * <p>O vínculo em si continua sendo com a turma — é ele que dá as permissões e faz a turma
-   * aparecer no perfil da pessoa —, então a chamada recebe a turma do núcleo e o papel que todos os
-   * selecionados vão exercer nela.
+   * aparecer no perfil da pessoa —, então a chamada recebe a turma do núcleo e a função de cada
+   * selecionado nela. Cada pessoa tem uma única função por turma.
    *
    * <p>É idempotente: quem já está na equipe daquela turma é ignorado sem erro, e a resposta diz
    * quem entrou, quem já estava e quem ficou de fora por conflito de horário.
@@ -216,12 +248,14 @@ public class NucleoController {
   public Map<String,Object> vincularProfissionais(@PathVariable String id,@RequestBody VincularProfissionaisRequest req){
     CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO);
     Nucleo nucleo=nucleos.findById(id).orElseThrow(()->new ApiException(HttpStatus.NOT_FOUND,"not_found","Núcleo não encontrado."));
-    if(req==null||req.profissionaisIds()==null||req.profissionaisIds().isEmpty())
+    List<VinculoItem> itens=req==null?List.of():req.itens();
+    if(itens.isEmpty())
       throw new ApiException(HttpStatus.BAD_REQUEST,"profissionais_obrigatorios","Selecione ao menos um profissional.");
     if(req.turmaId()==null||req.turmaId().isBlank())
       throw new ApiException(HttpStatus.BAD_REQUEST,"turma_obrigatoria","Selecione a turma do núcleo em que a equipe vai atuar.");
-    if(!TipoProfissional.valido(req.tipoProfissional()))
-      throw new ApiException(HttpStatus.BAD_REQUEST,"tipo_profissional_invalido","Selecione um tipo profissional válido.");
+    // Valida tudo antes de gravar: função faltando em uma pessoa não deixa o lote pela metade.
+    if(itens.stream().anyMatch(v->!TipoProfissional.valido(v.tipoProfissional())))
+      throw new ApiException(HttpStatus.BAD_REQUEST,"tipo_profissional_invalido","Escolha a função de cada profissional selecionado.");
     Turma turma=turmas.findById(req.turmaId())
         .filter(t->t.isAtivo()&&nucleo.getId().equals(t.getNucleoId()))
         .orElseThrow(()->new ApiException(HttpStatus.BAD_REQUEST,"turma_invalida","A turma selecionada não pertence a este núcleo."));
@@ -230,7 +264,13 @@ public class NucleoController {
     List<String> jaVinculados=new ArrayList<>();
     List<Map<String,String>> recusados=new ArrayList<>();
 
-    for(String userId: new LinkedHashSet<>(req.profissionaisIds())){
+    for(VinculoItem item: itens){
+      String userId=item.userId();
+      if(nucleo.getProjetoId()==null
+          || !profissionaisDoProjeto.existsByProjetoIdAndUserId(nucleo.getProjetoId(),userId)){
+        recusados.add(Map.of("user_id",userId,"motivo","Vincule primeiro este profissional ao projeto do núcleo."));
+        continue;
+      }
       Usuario alvo=usuarios.findById(userId).filter(u->!u.isExcluido()).orElse(null);
       if(alvo==null||alvo.getPerfil()==Perfil.ALUNA_FF){
         recusados.add(Map.of("user_id",userId,"motivo","Profissional não encontrado ou inválido."));
@@ -240,13 +280,15 @@ public class NucleoController {
       if(vinculo!=null&&vinculo.isAtivo()){ jaVinculados.add(userId); continue; }
       String conflito=conflitoDeHorario(alvo,turma);
       if(conflito!=null){ recusados.add(Map.of("user_id",userId,"nome",alvo.getName(),"motivo",conflito)); continue; }
+      String funcaoDivergente=funcaoNoNucleo.conflito(alvo,turma,item.tipoProfissional());
+      if(funcaoDivergente!=null){ recusados.add(Map.of("user_id",userId,"nome",alvo.getName(),"motivo",funcaoDivergente)); continue; }
       if(vinculo==null) vinculo=new TurmaEquipe();
       vinculo.setTurmaId(turma.getId());
       vinculo.setUserId(userId);
-      vinculo.setTipoProfissional(req.tipoProfissional());
+      vinculo.setTipoProfissional(item.tipoProfissional());
       vinculo.setAtivo(true);
       equipe.save(vinculo);
-      sincronizarVinculoPrincipal(alvo,turma,nucleo,req.tipoProfissional());
+      sincronizarVinculoPrincipal(alvo,turma,nucleo,item.tipoProfissional());
       adicionados.add(userId);
     }
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/store/app-context'
-import { getMinhaConfirmacao, submitConfirmacao } from '@/services/ficha-confirmacao'
 import {
   calcularRendaPerCapita,
   faixaDaRenda,
@@ -9,6 +8,8 @@ import {
   formatarReal,
 } from '@/lib/confirmacao-fields'
 import { buscarCep, formatCep } from '@/lib/viacep'
+import { formatarNucleo } from '@/lib/constants'
+import { getNucleosPublicos } from '@/services/nucleos'
 import { FieldRenderer } from '@/components/confirmacao/FieldRenderer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -36,28 +37,29 @@ import {
   BellRing,
 } from 'lucide-react'
 
+const CAMPOS_EXCLUSIVOS_ESPACO_KIDS = new Set([
+  'tem_rede_apoio_filhos',
+  'precisa_levar_filhos',
+  'criancas',
+])
+
 export default function FichaConfirmacao() {
-  const { user, inscricoes } = useApp()
+  // A ficha vem do contexto, que já a carrega e a atualiza após o envio. Buscar de novo aqui
+  // criava uma segunda fonte para o mesmo dado: numa falha momentânea esta tela mostrava o
+  // formulário em branco para quem já tinha entregue a ficha.
+  const { user, inscricoes, minhaConfirmacao, alunaGateReady, submitFichaConfirmacao } = useApp()
   const navigate = useNavigate()
   const minhaInscricao = inscricoes.find((i) => i.user_id === user?.id)
   const [step, setStep] = useState(1)
   const [values, setValues] = useState<Record<string, any>>({})
   const [files, setFiles] = useState<Record<string, File>>({})
-  const [fichaEntregue, setFichaEntregue] = useState(false)
   const [enviadaAgora, setEnviadaAgora] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [avisoFinalizacao, setAvisoFinalizacao] = useState(false)
+  const [espacoKidsDisponivel, setEspacoKidsDisponivel] = useState(false)
 
-  useEffect(() => {
-    if (!user) return
-    getMinhaConfirmacao(user.id)
-      .then((res) => {
-        if (res) setFichaEntregue(true)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [user])
+  const fichaEntregue = !!minhaConfirmacao
+  const loading = !alunaGateReady
 
   useEffect(() => {
     if (!minhaInscricao) return
@@ -70,8 +72,37 @@ export default function FichaConfirmacao() {
         }
       }),
     )
+    // O cadastro guarda rua e número juntos. Na confirmação eles são campos separados.
+    const enderecoCompleto = String(minhaInscricao.endereco ?? '').trim()
+    const separadorNumero = enderecoCompleto.lastIndexOf(',')
+    if (separadorNumero > 0) {
+      prefilled.endereco = enderecoCompleto.slice(0, separadorNumero).trim()
+      prefilled.numero = enderecoCompleto.slice(separadorNumero + 1).trim()
+    }
+    prefilled.email = minhaInscricao.email || user?.email || ''
+    prefilled.naturalidade = [minhaInscricao.cidade, minhaInscricao.estado]
+      .filter(Boolean)
+      .join('/')
+    prefilled.turma = formatarNucleo(minhaInscricao.turma)
     setValues((prev) => ({ ...prefilled, ...prev }))
-  }, [minhaInscricao])
+  }, [minhaInscricao, user?.email])
+
+  useEffect(() => {
+    if (!minhaInscricao?.turma) return
+    getNucleosPublicos()
+      .then((nucleos) => {
+        const oferece = nucleos.find((n) => n.codigo === minhaInscricao.turma)?.espaco_kids === true
+        setEspacoKidsDisponivel(oferece)
+        if (!oferece) {
+          setValues((atuais) => {
+            const proximos = { ...atuais }
+            CAMPOS_EXCLUSIVOS_ESPACO_KIDS.forEach((campo) => delete proximos[campo])
+            return proximos
+          })
+        }
+      })
+      .catch(() => setEspacoKidsDisponivel(false))
+  }, [minhaInscricao?.turma])
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>
 
@@ -160,7 +191,8 @@ export default function FichaConfirmacao() {
           </p>
           <p className="mt-1 text-sm">
             Fique atenta, nos próximos dois dias você receberá todas as instruções da sua aula
-            inaugural. A data também aparece nos seus avisos e no Mural.
+            inaugural. Quando a data for definida, você recebe uma notificação e ela passa a
+            aparecer em "Próxima Aula", no seu painel, e no Calendário.
           </p>
         </div>
         <Button className="mt-6" onClick={() => navigate('/aluna/dashboard')}>
@@ -172,6 +204,7 @@ export default function FichaConfirmacao() {
   const section = formSections[step - 1]
   const totalSteps = formSections.length
   const campoVisivel = (field: (typeof section.fields)[number]) =>
+    (!CAMPOS_EXCLUSIVOS_ESPACO_KIDS.has(field.name) || espacoKidsDisponivel) &&
     (!field.showWhen || values[field.showWhen.field] === field.showWhen.equals) &&
     (!field.hideWhen || values[field.hideWhen.field] !== field.hideWhen.equals)
 
@@ -306,7 +339,10 @@ export default function FichaConfirmacao() {
       fd.append('foto_cpf', files.foto_cpf)
       fd.append('foto_perfil', files.foto_perfil)
       fd.append('foto_comprovante_residencia', files.foto_comprovante_residencia)
-      await submitConfirmacao(fd)
+      // Passa pelo contexto para que a ficha recém-enviada entre no estado compartilhado na
+      // hora: é ela que abre o acesso ao painel e tira o item "Ficha de Confirmação" do menu.
+      const { error } = await submitFichaConfirmacao(fd)
+      if (error) throw error
       setEnviadaAgora(true)
       toast({ title: 'Ficha enviada com sucesso!' })
     } catch (err: any) {
@@ -410,8 +446,8 @@ export default function FichaConfirmacao() {
                 A participação na primeira aula é obrigatória.
               </span>
               <span className="block">
-                A data da primeira aula será divulgada no Mural de Avisos. Fique atenta e acompanhe
-                o mural regularmente.
+                Quando a data for definida, você recebe uma notificação e ela aparece em "Próxima
+                Aula", no seu painel, e no Calendário. Fique atenta.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

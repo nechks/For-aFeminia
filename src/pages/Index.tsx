@@ -50,12 +50,14 @@ export default function Index() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-background">
       <div className="flex-1 relative flex flex-col justify-center p-8 md:p-16 bg-gradient-to-br from-primary via-primary to-rosa text-primary-foreground overflow-hidden">
-        <div className="absolute inset-0 opacity-20">
+        <div className="absolute inset-0">
           <img
-            src="https://img.usecurling.com/p/800/1200?q=martial%20arts%20women&color=black"
-            alt="Background"
-            className="w-full h-full object-cover"
+            src="/login-forca.jpg"
+            alt="Alunas do Força Feminina em aula de defesa pessoal"
+            className="w-full h-full object-cover object-[60%_center]"
           />
+          {/* A foto fica nítida; a camada da marca por cima garante a leitura do texto. */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/90 via-primary/70 to-rosa/50" />
         </div>
         <div className="relative z-10 max-w-xl animate-slide-up">
           <div className="flex items-center gap-3 mb-6">
@@ -119,7 +121,7 @@ export default function Index() {
             <p className="mt-4 text-sm text-center text-muted-foreground">
               É da equipe?{' '}
               <Link to="/cadastro-professor" className="font-medium text-primary hover:underline">
-                Cadastre-se como professor(a)
+                Cadastre-se como profissional
               </Link>
             </p>
             <div className="mt-4 text-xs text-muted-foreground font-mono bg-muted p-3 rounded">

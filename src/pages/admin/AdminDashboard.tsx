@@ -3,7 +3,7 @@ import { useApp } from '@/store/app-context'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getInscricoesPaginated, type PaginatedInscricoes } from '@/services/ficha-inscricao'
 import { FichaInscricaoFF, StatusInscricao } from '@/lib/types'
-import { getStatusInfo, turmaLabels, statusInfo } from '@/lib/constants'
+import { getStatusInfo, turmaLabels, nucleosCadastrados, statusInfo } from '@/lib/constants'
 import { InscricaoDetailDialog } from '@/components/admin/InscricaoDetailDialog'
 import { ApprovalDialog, CancellationDialog } from '@/components/admin/ActionDialogs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -247,9 +247,9 @@ export default function AdminDashboard() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Todas as turmas</SelectItem>
-                {Object.entries(turmaLabels).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>

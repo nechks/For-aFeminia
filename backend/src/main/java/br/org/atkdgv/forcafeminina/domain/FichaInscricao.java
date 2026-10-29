@@ -197,6 +197,10 @@ public class FichaInscricao {
   @JsonProperty("orientacao_sexual")
   private String orientacaoSexual;
 
+  /** Autodescrição quando a candidata escolhe "Outra orientação sexual". */
+  @JsonProperty("orientacao_sexual_outro")
+  private String orientacaoSexualOutro;
+
   /** P21 — cor ou raça/etnia, nas categorias autoatribuídas do IBGE. */
   @JsonProperty("cor_raca")
   private String corRaca;
@@ -400,6 +404,8 @@ public class FichaInscricao {
   public void setGenero(String v) { this.genero = v; }
   public String getOrientacaoSexual() { return orientacaoSexual; }
   public void setOrientacaoSexual(String v) { this.orientacaoSexual = v; }
+  public String getOrientacaoSexualOutro() { return orientacaoSexualOutro; }
+  public void setOrientacaoSexualOutro(String v) { this.orientacaoSexualOutro = v; }
   public String getCorRaca() { return corRaca; }
   public void setCorRaca(String v) { this.corRaca = v; }
   public String getPcd() { return pcd; }

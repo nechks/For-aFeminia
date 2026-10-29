@@ -24,7 +24,7 @@ import {
   UserX,
   CalendarDays,
 } from 'lucide-react'
-import { turmaLabels } from '@/lib/constants'
+import { nucleosCadastrados } from '@/lib/constants'
 import { getResumoChamadas, type ResumoChamadas } from '@/services/chamadas-resumo'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -87,9 +87,9 @@ export default function AdminDashboardPage() {
 
   const turmaChartData = useMemo(
     () =>
-      Object.entries(turmaLabels).map(([key, label]) => ({
-        name: label.split(' - ')[0],
-        total: inscricoes.filter((i) => i.turma === key).length,
+      nucleosCadastrados.map(({ codigo, nome }) => ({
+        name: nome.split(' - ')[0],
+        total: inscricoes.filter((i) => i.turma === codigo).length,
       })),
     [inscricoes],
   )

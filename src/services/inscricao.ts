@@ -18,6 +18,7 @@ export interface InscricaoData {
   zona_residencia: string
   genero: string
   orientacao_sexual: string
+  orientacao_sexual_outro: string
   cor_raca: string
   pcd: string
   tipos_deficiencia: string[]

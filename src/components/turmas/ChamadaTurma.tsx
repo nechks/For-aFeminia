@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
   getPresencasTurma,
@@ -48,9 +48,17 @@ export default function ChamadaTurma({
   const [saving, setSaving] = useState(false)
   const [chamadaState, setChamadaState] = useState<Record<string, RegistroChamadaState>>({})
 
-  const loadData = useCallback(async () => {
+  // Marcações feitas na tela e ainda não salvas. A atualização automática não pode apagá-las.
+  const alteradoRef = useRef(false)
+
+  /**
+   * `silencioso` é a atualização automática: não troca a lista pelo "carregando" (era isso que
+   * fazia a tela piscar a cada 10 s) e não mexe na chamada enquanto há marcações não salvas.
+   */
+  const loadData = useCallback(async (silencioso = false) => {
     if (!turmaId || !dataAula) return
-    setLoading(true)
+    if (silencioso && alteradoRef.current) return
+    if (!silencioso) setLoading(true)
     try {
       const result = await getPresencasTurma(turmaId, dataAula, tipoChamada)
       setAlunos(result.alunos)
@@ -67,38 +75,49 @@ export default function ChamadaTurma({
           observacao: a.presenca?.justificativa ?? '',
         }
       })
-      setChamadaState(state)
+      // Só regrava se mudou: a mesma chamada vinda de novo não redesenha a tabela.
+      setChamadaState((atual) =>
+        JSON.stringify(atual) === JSON.stringify(state) ? atual : state,
+      )
+      alteradoRef.current = false
     } catch (err) {
       console.error('Failed to load presencas:', err)
-      toast({
-        title: 'Erro ao carregar lista de presença',
-        description: getErrorMessage(err),
-        variant: 'destructive',
-      })
+      if (!silencioso) {
+        toast({
+          title: 'Erro ao carregar lista de presença',
+          description: getErrorMessage(err),
+          variant: 'destructive',
+        })
+      }
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }, [turmaId, dataAula, tipoChamada])
 
   useEffect(() => {
+    alteradoRef.current = false
     loadData()
   }, [loadData])
 
   useRealtime('presenca', () => {
-    loadData()
+    loadData(true)
   })
 
-  const marcar = (userId: string, status: StatusChamada) =>
+  const marcar = (userId: string, status: StatusChamada) => {
+    alteradoRef.current = true
     setChamadaState((prev) => ({
       ...prev,
       [userId]: { status, observacao: prev[userId]?.observacao ?? '' },
     }))
+  }
 
-  const handleObservacao = (userId: string, value: string) =>
+  const handleObservacao = (userId: string, value: string) => {
+    alteradoRef.current = true
     setChamadaState((prev) => ({
       ...prev,
       [userId]: { status: prev[userId]?.status ?? null, observacao: value },
     }))
+  }
 
   const handleSave = async () => {
     const pendentes = alunos.filter((a) => !chamadaState[a.user_id]?.status)

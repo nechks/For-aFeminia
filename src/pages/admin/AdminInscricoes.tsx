@@ -3,8 +3,8 @@ import { useApp } from '@/store/app-context'
 import { useRealtime } from '@/hooks/use-realtime'
 import { getInscricoesPaginated, type PaginatedInscricoes } from '@/services/ficha-inscricao'
 import { FichaInscricaoFF } from '@/lib/types'
-import { getStatusInfo, turmaLabels, statusInfo } from '@/lib/constants'
-import { CRITERIO_ZONA, PONTUACAO_MAXIMA, TOTAL_CRITERIOS } from '@/lib/pontuacao'
+import { getStatusInfo, turmaLabels, nucleosCadastrados, formatarNucleo } from '@/lib/constants'
+import { CRITERIO_ZONA, PONTOS_ZONA, PONTUACAO_MAXIMA, TOTAL_CRITERIOS } from '@/lib/pontuacao'
 import { InscricaoDetailDialog } from '@/components/admin/InscricaoDetailDialog'
 import { ApprovalDialog, CancellationDialog } from '@/components/admin/ActionDialogs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -17,16 +17,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -34,19 +27,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MoreHorizontal, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Loader2, Check, Clock } from 'lucide-react'
 import { toast } from '@/components/ui/use-toast'
 
 const PER_PAGE = 10
 
+/** Status em que a candidata ainda pode ser aprovada ou enviada à fila de espera. */
+const decisaoEmAberto = (status?: string) =>
+  ['AGUARDANDO', 'EM_ANALISE', 'LISTA_ESPERA'].includes(status ?? '')
+
+/**
+ * Aba de triagem: concentra, independente do status, quem alcançou a pontuação da zona
+ * prioritária e ainda espera decisão. A lista de espera fica de fora — ela já tem aba própria e é
+ * revista quando abre vaga.
+ */
+const ABA_PRIORIDADE = 'PRIORIDADE_80'
+
+/**
+ * Abas por situação, no mesmo padrão da tela de Projetos. A primeira aba reúne quem ainda
+ * aguarda decisão, que é onde a gestão atua; as demais separam o histórico já decidido.
+ */
+const abasStatus: { value: string; label: string }[] = [
+  { value: ABA_PRIORIDADE, label: `★ Prioridade ${PONTOS_ZONA}+` },
+  { value: 'AGUARDANDO', label: '● Aguardando' },
+  { value: 'EM_ANALISE', label: '● Em análise' },
+  { value: 'LISTA_ESPERA', label: '● Em espera' },
+  { value: 'APROVADA', label: '● Aprovadas' },
+  { value: 'CANCELADA', label: '● Canceladas' },
+  { value: 'REPROVADA', label: '● Reprovadas' },
+  { value: 'ALL', label: 'Todas' },
+]
+
 export default function AdminInscricoes() {
   const { updateInscricaoStatus, isAuthenticated, user } = useApp()
-  // Somente o Administrativo analisa e decide inscrições; os demais perfis apenas consultam.
-  const podeAnalisarInscricao = user?.perfil === 'ADMINISTRATIVO'
+  // Administrativo e Gestão Geral analisam e decidem inscrições; os demais perfis apenas consultam.
+  const podeAnalisarInscricao = user?.perfil === 'ADMINISTRATIVO' || user?.perfil === 'GESTAO_GERAL'
   const podeDecidirVagaCrianca = podeAnalisarInscricao
   const [data, setData] = useState<PaginatedInscricoes | null>(null)
   const [page, setPage] = useState(1)
-  const [statusFilter, setStatusFilter] = useState('ALL')
+  // Abre em "Aguardando": é a fila que a gestão precisa decidir.
+  const [statusFilter, setStatusFilter] = useState('AGUARDANDO')
   const [turmaFilter, setTurmaFilter] = useState('ALL')
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -55,14 +75,23 @@ export default function AdminInscricoes() {
   const [detailInscricao, setDetailInscricao] = useState<FichaInscricaoFF | null>(null)
   const [approvalId, setApprovalId] = useState<string | null>(null)
   const [cancelId, setCancelId] = useState<string | null>(null)
+  const [decidindo, setDecidindo] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  /**
+   * `silencioso` é usado pela atualização automática: recarregar em segundo plano não pode
+   * trocar a tabela por um spinner, senão a tela pisca a cada ciclo do polling.
+   */
+  const loadData = useCallback(async (silencioso = false) => {
+    if (!silencioso) setLoading(true)
     try {
+      const prioridade = statusFilter === ABA_PRIORIDADE
       const result = await getInscricoesPaginated({
         page,
         perPage: PER_PAGE,
-        status: statusFilter,
+        // A aba de prioridade corta por pontuação, não por um status específico.
+        status: prioridade ? 'ALL' : statusFilter,
+        pontuacaoMinima: prioridade ? PONTOS_ZONA : undefined,
+        pendentesAnalise: prioridade ? true : undefined,
         turma: turmaFilter,
         search,
       })
@@ -81,7 +110,7 @@ export default function AdminInscricoes() {
   useRealtime(
     'ficha_inscricao_ff',
     () => {
-      loadData()
+      loadData(true)
     },
     isAuthenticated,
   )
@@ -117,6 +146,7 @@ export default function AdminInscricoes() {
       return
     }
     setApprovalId(null)
+    setDetailInscricao(null)
     toast({
       title: 'Inscrição Aprovada!',
       description: date
@@ -127,23 +157,31 @@ export default function AdminInscricoes() {
   }
 
   const handleWaitlist = async (id: string) => {
+    setDecidindo(true)
     const { error } = await updateInscricaoStatus(id, 'LISTA_ESPERA')
     if (error) {
       toast({ title: 'Erro', variant: 'destructive' })
+      setDecidindo(false)
       return
     }
     toast({ title: 'Inscrição movida para Lista de Espera' })
+    setDetailInscricao(null)
     loadData()
+    setDecidindo(false)
   }
 
   const handleAnalyze = async (id: string) => {
+    setDecidindo(true)
     const { error } = await updateInscricaoStatus(id, 'EM_ANALISE')
     if (error) {
       toast({ title: 'Erro', variant: 'destructive' })
+      setDecidindo(false)
       return
     }
     toast({ title: 'Inscrição marcada como em análise' })
+    setDetailInscricao(null)
     loadData()
+    setDecidindo(false)
   }
 
   const handleCancel = async (motivo: string) => {
@@ -178,10 +216,23 @@ export default function AdminInscricoes() {
           <CardDescription>
             Ordenadas pela pontuação dos critérios de prioridade. Em caso de empate, leia o relato
             da candidata para concluir a análise. Morar na cidade e na zona prioritária do núcleo
-            vale 80 dos {PONTUACAO_MAXIMA} pontos; os outros nove critérios dividem os 20 restantes.
+            vale {PONTOS_ZONA} dos {PONTUACAO_MAXIMA} pontos; os outros nove critérios dividem os{' '}
+            {PONTUACAO_MAXIMA - PONTOS_ZONA} restantes. A aba{' '}
+            <strong>Prioridade {PONTOS_ZONA}+</strong> reúne quem mora na zona prioritária e ainda
+            espera decisão (Aguardando e Em análise); a fila de espera continua na aba dela.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <Tabs value={statusFilter} onValueChange={onStatusChange} className="mb-6">
+            <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
+              {abasStatus.map((aba) => (
+                <TabsTrigger key={aba.value} value={aba.value}>
+                  {aba.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -192,28 +243,15 @@ export default function AdminInscricoes() {
                 onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
-            <Select value={statusFilter} onValueChange={onStatusChange}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Todos os status</SelectItem>
-                {Object.entries(statusInfo).map(([key, info]) => (
-                  <SelectItem key={key} value={key}>
-                    {info.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Select value={turmaFilter} onValueChange={onTurmaChange}>
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="Turma" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Todas as turmas</SelectItem>
-                {Object.entries(turmaLabels).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -231,19 +269,18 @@ export default function AdminInscricoes() {
                   <TableHead>Relato para desempate</TableHead>
                   <TableHead>Data Cadastro</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center">
+                    <TableCell colSpan={7} className="h-24 text-center">
                       Nenhum registro encontrado.
                     </TableCell>
                   </TableRow>
@@ -276,7 +313,7 @@ export default function AdminInscricoes() {
                         </TableCell>
                         <TableCell>{safeStr(inscricao.cpf) || '—'}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {turmaLabels[inscricao.turma ?? ''] ?? (safeStr(inscricao.turma) || '—')}
+                          {formatarNucleo(inscricao.turma)}
                         </TableCell>
                         <TableCell className="max-w-[280px]">
                           <p className="line-clamp-3 text-sm text-muted-foreground">
@@ -288,42 +325,41 @@ export default function AdminInscricoes() {
                           <Badge className={status.color} variant="secondary">
                             {status.label}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
+                          {/*
+                            Decisão direta na listagem: evita abrir o detalhe só para aprovar ou
+                            enviar à fila. O clique não pode propagar, senão abriria o diálogo.
+                          */}
+                          {podeAnalisarInscricao && decisaoEmAberto(inscricao.status) && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={decidindo}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setApprovalId(inscricao.id)
+                                }}
+                              >
+                                <Check className="mr-1 h-3 w-3" />
+                                Aprovar
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => setDetailInscricao(inscricao)}>
-                                Ver Detalhes
-                              </DropdownMenuItem>
-                              {podeAnalisarInscricao && (
-                                <>
-                                  <DropdownMenuItem onClick={() => setApprovalId(inscricao.id)}>
-                                    Aprovar Vaga
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleAnalyze(inscricao.id)}>
-                                    Marcar em Análise
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleWaitlist(inscricao.id)}>
-                                    Lista de Espera
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive"
-                                    onClick={() => setCancelId(inscricao.id)}
-                                  >
-                                    Cancelar Inscrição
-                                  </DropdownMenuItem>
-                                </>
+                              {inscricao.status !== 'LISTA_ESPERA' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={decidindo}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleWaitlist(inscricao.id)
+                                  }}
+                                >
+                                  <Clock className="mr-1 h-3 w-3" />
+                                  Fila de espera
+                                </Button>
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                            </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
@@ -366,6 +402,12 @@ export default function AdminInscricoes() {
         open={!!detailInscricao}
         onOpenChange={(open) => !open && setDetailInscricao(null)}
         podeDecidirVagaCrianca={podeDecidirVagaCrianca}
+        podeDecidirInscricao={podeAnalisarInscricao}
+        decidindo={decidindo}
+        onAprovar={() => detailInscricao && setApprovalId(detailInscricao.id)}
+        onListaEspera={() => detailInscricao && handleWaitlist(detailInscricao.id)}
+        onMarcarAnalise={() => detailInscricao && handleAnalyze(detailInscricao.id)}
+        onCancelar={() => detailInscricao && setCancelId(detailInscricao.id)}
       />
       <ApprovalDialog
         open={!!approvalId}

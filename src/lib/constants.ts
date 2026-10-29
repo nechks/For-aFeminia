@@ -1,7 +1,58 @@
-import { StatusInscricao } from '@/lib/types'
+import { PerfilUsuario, StatusInscricao } from '@/lib/types'
 
-// Preenchido somente com os núcleos existentes no backend durante a inicialização.
-export const turmaLabels: Record<string, string> = {}
+/**
+ * Nome humano de cada perfil. O valor guardado é um código técnico (`ALUNA_FF`) e nunca deve
+ * aparecer na interface.
+ */
+export const perfilLabels: Readonly<Record<PerfilUsuario, string>> = Object.freeze({
+  ALUNA_FF: 'Aluna',
+  PROFESSOR: 'Professor(a)',
+  ASSISTENTE_SOCIAL: 'Assistente Social',
+  ADMINISTRATIVO: 'Administrativo',
+  GESTAO_GERAL: 'Gestão Geral',
+})
+
+export const formatarPerfil = (perfil?: string | null) =>
+  perfil ? (perfilLabels[perfil as PerfilUsuario] ?? perfil) : '—'
+
+/**
+ * Nomes dos núcleos históricos do projeto. Servem de base para que inscrições antigas nunca
+ * exibam o código técnico (ex.: `AEST_SERRA`) quando o núcleo correspondente ainda não foi
+ * cadastrado no backend. Os núcleos vindos da API sobrescrevem estes rótulos.
+ */
+export const NUCLEOS_PADRAO: Readonly<Record<string, string>> = Object.freeze({
+  CENTRO_VITORIA: 'Centro - Vitória',
+  AEST_SERRA: 'Clube AEST - Serra',
+  ITAQUARI_CARIACICA: 'Itaquari - Cariacica',
+  CONJUNTO_CARAPINA_SERRA: 'Conj. Carapina I - Serra',
+  ATLANTICA_VILLE_VITORIA: 'Atlântica Ville - Vitória',
+})
+
+// Começa com os nomes padrão e recebe os núcleos cadastrados no backend na inicialização.
+export const turmaLabels: Record<string, string> = { ...NUCLEOS_PADRAO }
+
+/**
+ * Núcleos que realmente existem no backend, preenchidos na inicialização. É esta a lista que os
+ * seletores devem oferecer: `turmaLabels` também guarda os nomes padrão, que servem apenas para
+ * traduzir códigos de inscrições antigas e não correspondem a núcleos cadastrados — oferecê-los
+ * para escolha gerava opções repetidas e consultas que nunca encontram ninguém.
+ */
+export const nucleosCadastrados: { codigo: string; nome: string }[] = []
+
+/**
+ * Nome humano do núcleo. O fallback evita expor códigos técnicos enquanto os rótulos ainda
+ * estão carregando e também melhora registros legados que perderam letras acentuadas no código.
+ */
+export const formatarNucleo = (codigo?: string | null) => {
+  if (!codigo) return '—'
+  const rotulo = turmaLabels[codigo]
+  if (rotulo) return rotulo
+  return codigo
+    .split('_')
+    .filter(Boolean)
+    .map((parte) => parte.charAt(0).toUpperCase() + parte.slice(1).toLocaleLowerCase('pt-BR'))
+    .join(' ')
+}
 
 export const statusInfo: Record<StatusInscricao, { label: string; color: string }> = {
   AGUARDANDO: { label: 'Aguardando', color: 'bg-amber-100 text-amber-800 hover:bg-amber-100' },

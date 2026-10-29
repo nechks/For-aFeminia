@@ -1,4 +1,13 @@
+import api, { ApiError } from '@/lib/api/client'
+
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8085'
+
+/** Tipos que podem ser escolhidos no cadastro de profissional (Gestão Geral fica de fora). */
+export const TIPOS_PROFISSIONAL = [
+  ['PROFESSOR', 'Professor(a)'],
+  ['ASSISTENTE_SOCIAL', 'Assistente Social'],
+  ['ADMINISTRATIVO', 'Administrativo'],
+] as const
 
 export interface CadastroProfessorResposta {
   id: string
@@ -20,8 +29,23 @@ export class CadastroProfessorError extends Error {
 }
 
 /**
- * Cadastro público de professor (multipart, sem login). Vira uma solicitação pendente que a
- * Gestão aprova depois, definindo o núcleo.
+ * Cadastro feito pela Gestão Geral (com login): mesmo formulário do autocadastro, mas a conta já
+ * nasce criada com o tipo escolhido.
+ */
+export const submitCadastroPelaGestao = async (
+  form: FormData,
+): Promise<CadastroProfessorResposta> => {
+  try {
+    return await api.postForm<CadastroProfessorResposta>('/api/cadastro-profissional', form)
+  } catch (err) {
+    if (err instanceof ApiError) throw new CadastroProfessorError(err.message, err.fields)
+    throw err
+  }
+}
+
+/**
+ * Autocadastro público de profissional (multipart, sem login). Vira uma solicitação pendente que a
+ * Gestão aprova em Solicitações; a conta nasce com o tipo escolhido no formulário.
  */
 export const submitCadastroProfessor = async (
   form: FormData,

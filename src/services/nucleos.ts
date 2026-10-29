@@ -133,20 +133,24 @@ export interface VinculoEmLote {
   recusados: { user_id: string; nome?: string; motivo: string }[]
 }
 
+/** Um profissional e a função que ele vai exercer na turma. */
+export interface VinculoProfissional {
+  user_id: string
+  tipo_profissional: string
+}
+
 /**
- * Vincula vários profissionais de uma vez. O vínculo em si continua sendo com a turma — é ele que
- * dá as permissões —, então todos os selecionados entram na mesma turma com o mesmo papel.
+ * Vincula vários profissionais de uma vez na mesma turma, cada um com a sua função. O backend
+ * recusa (sem derrubar o lote) quem já exerce outra função no mesmo núcleo ou tem choque de horário.
  */
 export const vincularProfissionaisAoNucleo = (
   nucleoId: string,
-  profissionaisIds: string[],
   turmaId: string,
-  tipoProfissional: string,
+  vinculos: VinculoProfissional[],
 ) =>
   api.post<VinculoEmLote>(`/api/nucleos/${nucleoId}/profissionais`, {
-    profissionais_ids: profissionaisIds,
     turma_id: turmaId,
-    tipo_profissional: tipoProfissional,
+    vinculos,
   })
 export const excluirNucleo = (id: string, senha: string) =>
   api.delete<void>(`/api/nucleos/${id}`, { senha })

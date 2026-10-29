@@ -12,5 +12,7 @@ public interface ProjetoProfissionalRepository extends JpaRepository<ProjetoProf
 
   List<ProjetoProfissional> findByUserId(String userId);
 
+  boolean existsByProjetoIdAndUserId(String projetoId, String userId);
+
   void deleteByProjetoIdAndUserId(String projetoId, String userId);
 }

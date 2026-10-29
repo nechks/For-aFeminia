@@ -14,7 +14,8 @@ import {
   exportarDadosNucleo,
   DadosNucleo,
 } from '@/services/relatorios'
-import { turmaLabels, getStatusInfo } from '@/lib/constants'
+import { turmaLabels, nucleosCadastrados, getStatusInfo } from '@/lib/constants'
+import { getErrorMessage } from '@/lib/api/errors'
 import { fileUrl, ApiError } from '@/lib/api/client'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -375,9 +376,9 @@ function AtendimentosTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="TODAS">Todos os núcleos</SelectItem>
-                {Object.entries(turmaLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -473,6 +474,16 @@ const rotulosConfirmacao: Record<string, string> = {
   criancas: 'Crianças que serão levadas',
 }
 
+/**
+ * Opções gravadas como `{ item, quantidade }` saem só com o nome, no mesmo formato das fichas
+ * antigas, que registravam apenas o texto da opção. Texto simples passa inalterado.
+ */
+function itemComQuantidade(item: unknown): string {
+  if (!item || typeof item !== 'object') return String(item)
+  const { item: nome } = item as { item?: unknown }
+  return nome == null ? JSON.stringify(item) : String(nome)
+}
+
 function formatarValorConfirmacao(chave: string, valor: unknown): string {
   if (chave === 'criancas' && Array.isArray(valor)) {
     return valor
@@ -482,9 +493,11 @@ function formatarValorConfirmacao(chave: string, valor: unknown): string {
       })
       .join('; ')
   }
-  if (Array.isArray(valor)) return valor.join(', ')
+  // Campos de múltipla escolha com quantidade gravam { item, quantidade }; fichas anteriores à
+  // criação desse tipo de campo gravam só o texto da opção. Os dois formatos convivem no banco.
+  if (Array.isArray(valor)) return valor.map(itemComQuantidade).join(', ')
   if (typeof valor === 'boolean') return valor ? 'Sim' : 'Não'
-  if (valor && typeof valor === 'object') return JSON.stringify(valor)
+  if (valor && typeof valor === 'object') return itemComQuantidade(valor)
   return String(valor)
 }
 
@@ -783,9 +796,9 @@ function AlunaTab() {
                 <SelectValue placeholder="Selecione o núcleo..." />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(turmaLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -860,15 +873,14 @@ const camposCadastro = [
   ['cep', 'CEP'],
   ['nucleo', 'Núcleo'],
   ['faltas', 'Número de faltas'],
-  ['inicio_projeto', 'Início do projeto'],
-  ['termino_projeto', 'Término do projeto'],
 ] as const
+
+/** Chaves já oferecidas pelo bloco Cadastro; a ficha de confirmação repete estas mesmas. */
+const CHAVES_DO_CADASTRO = new Set<string>(camposCadastro.map(([chave]) => chave))
 
 function DadosNucleoTab() {
   const { user } = useApp()
   const [turma, setTurma] = useState('')
-  const [inicio, setInicio] = useState('')
-  const [termino, setTermino] = useState('')
   const [campos, setCampos] = useState<string[]>(['nome_completo', 'faltas'])
   const [dados, setDados] = useState<DadosNucleo | null>(null)
   const [loading, setLoading] = useState(false)
@@ -877,11 +889,17 @@ function DadosNucleoTab() {
     ...formSections
       .filter((secao) => !secao.confidential || user?.perfil === 'GESTAO_GERAL')
       .flatMap((secao) =>
-        secao.fields.map((campo) => ({
-          chave: `confirmacao.${campo.name}`,
-          rotulo: campo.label,
-          grupo: `Ficha de Confirmação — ${secao.title}`,
-        })),
+        secao.fields
+          // A ficha repete os dados de identificação e endereço que já vêm do cadastro. Oferecer
+          // os dois lados colocava na tela pares de opções com o mesmo nome e, quase sempre, o
+          // mesmo valor. Fica o do cadastro, que existe para toda aluna aprovada mesmo quando a
+          // ficha ainda não foi entregue.
+          .filter((campo) => !CHAVES_DO_CADASTRO.has(campo.name))
+          .map((campo) => ({
+            chave: `confirmacao.${campo.name}`,
+            rotulo: campo.label,
+            grupo: `Ficha de Confirmação — ${secao.title}`,
+          })),
       ),
   ]
 
@@ -901,9 +919,14 @@ function DadosNucleoTab() {
     }
     setLoading(true)
     try {
-      setDados(await getDadosNucleo(turma, campos, inicio, termino))
-    } catch {
-      toast({ title: 'Erro ao gerar a tabela', variant: 'destructive' })
+      setDados(await getDadosNucleo(turma, campos))
+    } catch (error) {
+      // Mostrar a mensagem do servidor: o aviso genérico escondia o motivo real da recusa.
+      toast({
+        title: 'Erro ao gerar a tabela',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      })
     } finally {
       setLoading(false)
     }
@@ -911,9 +934,13 @@ function DadosNucleoTab() {
   const exportar = async () => {
     setLoading(true)
     try {
-      await exportarDadosNucleo(turma, campos, inicio, termino)
-    } catch {
-      toast({ title: 'Erro ao exportar a planilha', variant: 'destructive' })
+      await exportarDadosNucleo(turma, campos)
+    } catch (error) {
+      toast({
+        title: 'Erro ao exportar a planilha',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      })
     } finally {
       setLoading(false)
     }
@@ -927,8 +954,8 @@ function DadosNucleoTab() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5">
+        <div className="grid gap-3">
+          <div className="space-y-1.5 sm:max-w-sm">
             <Label>Núcleo *</Label>
             <Select
               value={turma}
@@ -941,35 +968,13 @@ function DadosNucleoTab() {
                 <SelectValue placeholder="Selecione..." />
               </SelectTrigger>
               <SelectContent>
-                {Object.entries(turmaLabels).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
+                {nucleosCadastrados.map(({ codigo, nome }) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Início do projeto</Label>
-            <Input
-              type="date"
-              value={inicio}
-              onChange={(e) => {
-                setInicio(e.target.value)
-                setDados(null)
-              }}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Término do projeto</Label>
-            <Input
-              type="date"
-              value={termino}
-              onChange={(e) => {
-                setTermino(e.target.value)
-                setDados(null)
-              }}
-            />
           </div>
         </div>
         <div>

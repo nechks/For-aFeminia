@@ -6,11 +6,13 @@ import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.domain.FichaConfirmacao;
 import br.org.atkdgv.forcafeminina.domain.FichaInscricao;
 import br.org.atkdgv.forcafeminina.domain.StatusInscricao;
+import br.org.atkdgv.forcafeminina.domain.Turma;
 import br.org.atkdgv.forcafeminina.repo.ExclusaoUsuarioRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaConfirmacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
+import br.org.atkdgv.forcafeminina.repo.TurmaRepository;
 import br.org.atkdgv.forcafeminina.service.FileStorageService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -46,6 +48,7 @@ public class UsuarioController {
   private final FichaConfirmacaoRepository confirmacoes;
   private final ObjectMapper objectMapper;
   private final NucleoRepository nucleos;
+  private final TurmaRepository turmas;
 
   public UsuarioController(
       UsuarioRepository usuarios,
@@ -55,7 +58,8 @@ public class UsuarioController {
       FichaInscricaoRepository fichas,
       FichaConfirmacaoRepository confirmacoes,
       ObjectMapper objectMapper,
-      NucleoRepository nucleos) {
+      NucleoRepository nucleos,
+      TurmaRepository turmas) {
     this.usuarios = usuarios;
     this.exclusoes = exclusoes;
     this.files = files;
@@ -64,6 +68,7 @@ public class UsuarioController {
     this.confirmacoes = confirmacoes;
     this.objectMapper = objectMapper;
     this.nucleos = nucleos;
+    this.turmas = turmas;
   }
 
   /** Aceita um perfil ou vários separados por vírgula (ex.: {@code PROFESSOR,ASSISTENTE_SOCIAL}). */
@@ -196,10 +201,18 @@ public class UsuarioController {
       throw new ApiException(HttpStatus.CONFLICT, "mesmo_nucleo", "A aluna já pertence a este núcleo.");
     }
     aluna.setTurma(req.turma());
-    // A turma antiga é de outro núcleo: a aluna volta para "sem turma" e é realocada lá.
-    aluna.setTurmaId(null);
     ficha.setTurma(req.turma());
-    ficha.setTurmaId(null);
+    // Cada núcleo tem uma única turma e não existe passo de alocação: a aluna passa direto para a
+    // turma do núcleo de destino. Enquanto esse núcleo não tiver turma aberta, ela fica sem turma
+    // e o vínculo é feito quando a turma for criada.
+    String turmaDestino =
+        nucleos
+            .findByCodigo(req.turma())
+            .flatMap(n -> turmas.findByNucleoIdOrderByNomeAsc(n.getId()).stream().findFirst())
+            .map(Turma::getId)
+            .orElse(null);
+    aluna.setTurmaId(turmaDestino);
+    ficha.setTurmaId(turmaDestino);
     fichas.save(ficha);
     confirmacoes.findFirstByUserIdOrderByCreatedDesc(id).ifPresent(conf -> atualizarTurmaConfirmacao(conf, req.turma()));
     return usuarios.save(aluna);

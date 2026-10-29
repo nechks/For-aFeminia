@@ -37,10 +37,11 @@ import {
   Clock,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { turmaLabels } from '@/lib/constants'
+import { formatarNucleo } from '@/lib/constants'
 import { formatarAulas } from '@/lib/turmas'
 import { fileUrl } from '@/lib/api/client'
 import { toast } from '@/components/ui/use-toast'
+import MinhasAvaliacoes from '@/components/aluna/MinhasAvaliacoes'
 
 export default function DashboardAluna() {
   const { user, minhaConfirmacao, isAuthenticated } = useApp()
@@ -110,16 +111,9 @@ export default function DashboardAluna() {
     loadDashboard()
   }, [loadDashboard])
 
+  // Um único ciclo: três hooks chamando o mesmo `loadDashboard` triplicavam as requisições.
   useRealtime(
-    'presenca',
-    () => {
-      loadDashboard()
-    },
-    isAuthenticated,
-  )
-
-  useRealtime(
-    'mural',
+    'aluna_dashboard',
     () => {
       loadDashboard()
     },
@@ -135,6 +129,17 @@ export default function DashboardAluna() {
   }
 
   const precisaPreencherFicha = !minhaConfirmacao
+  const primeiraAula = dashboard?.dataPrimeiraAula
+    ? new Date(`${dashboard.dataPrimeiraAula}T12:00:00`)
+    : null
+  const rotuloPrimeiraAula = primeiraAula
+    ? primeiraAula.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : 'Aguardando agendamento'
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -189,6 +194,8 @@ export default function DashboardAluna() {
           </CardContent>
         </Card>
       )}
+
+      <MinhasAvaliacoes />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
@@ -274,7 +281,7 @@ export default function DashboardAluna() {
                     <div className="flex items-center gap-2 mb-2">
                       {aviso.turma ? (
                         <span className="text-xs font-medium text-primary px-2 py-1 bg-primary/10 rounded-full">
-                          {turmaLabels[aviso.turma] ?? aviso.turma}
+                          {formatarNucleo(aviso.turma)}
                         </span>
                       ) : (
                         <span className="text-xs font-medium text-rosa px-2 py-1 bg-rosa/10 rounded-full">
@@ -348,11 +355,19 @@ export default function DashboardAluna() {
                 <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
                   <CalendarIcon className="w-6 h-6 text-primary" />
                 </div>
-                <div className="font-semibold text-lg text-primary">Sábado, 20/06</div>
-                <div className="text-sm font-medium">14:00 - 16:30</div>
-                <div className="flex items-center justify-center text-xs text-muted-foreground mt-2">
-                  <MapPin className="w-3 h-3 mr-1" /> Centro, Vitória
+                <div className="font-semibold text-lg capitalize text-primary">
+                  {rotuloPrimeiraAula}
                 </div>
+                {dashboard?.horarioInicio && dashboard?.horarioFim && (
+                  <div className="text-sm font-medium">
+                    {dashboard.horarioInicio} - {dashboard.horarioFim}
+                  </div>
+                )}
+                {dashboard?.localAula && (
+                  <div className="flex items-center justify-center text-xs text-muted-foreground mt-2">
+                    <MapPin className="w-3 h-3 mr-1" /> {dashboard.localAula}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -366,8 +381,7 @@ export default function DashboardAluna() {
                 <div className="flex items-center text-sm">
                   <CheckCircle2 className="w-4 h-4 text-rosa mr-2" />
                   <span className="font-medium">
-                    {turmaLabels[dashboard?.turma ?? ''] ??
-                      ((dashboard?.turma ?? '').replace(/_/g, ' ') || '—')}
+                    {formatarNucleo(dashboard?.turma)}
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground">

@@ -16,6 +16,7 @@ import br.org.atkdgv.forcafeminina.repo.EventoInscricaoRepository;
 import br.org.atkdgv.forcafeminina.repo.EventoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaConfirmacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
+import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.PresencaRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -65,9 +66,7 @@ public class RelatorioController {
       Map.entry("endereco", "Endereço"), Map.entry("bairro", "Bairro"),
       Map.entry("cidade", "Cidade"), Map.entry("estado", "Estado"),
       Map.entry("cep", "CEP"), Map.entry("nucleo", "Núcleo"),
-      Map.entry("faltas", "Número de faltas"),
-      Map.entry("inicio_projeto", "Início do projeto"),
-      Map.entry("termino_projeto", "Término do projeto"));
+      Map.entry("faltas", "Número de faltas"));
   private static final Set<String> CAMPOS_CONFIDENCIAIS = Set.of(
       "tipo_moradia", "situacao_moradia", "possui_agua", "possui_luz", "possui_esgoto",
       "bens_familia", "programas_sociais", "situacao_violencia", "tipo_violencia", "denuncio",
@@ -81,6 +80,7 @@ public class RelatorioController {
   private final PresencaRepository presencas;
   private final EventoRepository eventos;
   private final EventoInscricaoRepository inscricoesEvento;
+  private final NucleoRepository nucleos;
   private final ObjectMapper objectMapper;
 
   public RelatorioController(
@@ -92,6 +92,7 @@ public class RelatorioController {
       PresencaRepository presencas,
       EventoRepository eventos,
       EventoInscricaoRepository inscricoesEvento,
+      NucleoRepository nucleos,
       ObjectMapper objectMapper) {
     this.atendimentos = atendimentos;
     this.usuarios = usuarios;
@@ -101,6 +102,7 @@ public class RelatorioController {
     this.presencas = presencas;
     this.eventos = eventos;
     this.inscricoesEvento = inscricoesEvento;
+    this.nucleos = nucleos;
     this.objectMapper = objectMapper;
   }
 
@@ -213,26 +215,22 @@ public class RelatorioController {
   /** Prévia dos dados do núcleo com somente as colunas escolhidas. */
   @GetMapping("/nucleo")
   public Map<String, Object> dadosNucleo(
-      @RequestParam String turma, @RequestParam List<String> campos,
-      @RequestParam(required = false) String inicioProjeto,
-      @RequestParam(required = false) String terminoProjeto) {
+      @RequestParam String turma, @RequestParam List<String> campos) {
     CurrentUser.require(Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
     validarCamposNucleo(campos);
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("colunas", campos.stream().map(c -> Map.of("chave", c, "rotulo", rotuloCampo(c))).toList());
-    body.put("linhas", montarLinhasNucleo(turma, campos, inicioProjeto, terminoProjeto));
+    body.put("linhas", montarLinhasNucleo(turma, campos));
     return body;
   }
 
   /** Planilha dos dados do núcleo com as mesmas colunas exibidas na prévia. */
   @GetMapping("/nucleo/export")
   public ResponseEntity<byte[]> exportDadosNucleo(
-      @RequestParam String turma, @RequestParam List<String> campos,
-      @RequestParam(required = false) String inicioProjeto,
-      @RequestParam(required = false) String terminoProjeto) {
+      @RequestParam String turma, @RequestParam List<String> campos) {
     CurrentUser.require(Perfil.ADMINISTRATIVO, Perfil.GESTAO_GERAL);
     validarCamposNucleo(campos);
-    List<Map<String, Object>> linhas = montarLinhasNucleo(turma, campos, inicioProjeto, terminoProjeto);
+    List<Map<String, Object>> linhas = montarLinhasNucleo(turma, campos);
     try (XSSFWorkbook wb = new XSSFWorkbook()) {
       Sheet sheet = wb.createSheet("Dados do núcleo");
       CellStyle headerStyle = wb.createCellStyle();
@@ -279,8 +277,10 @@ public class RelatorioController {
     return "Ficha: " + Character.toUpperCase(texto.charAt(0)) + texto.substring(1);
   }
 
-  private List<Map<String, Object>> montarLinhasNucleo(String turma, List<String> campos, String inicio, String termino) {
+  private List<Map<String, Object>> montarLinhasNucleo(String turma, List<String> campos) {
     List<FichaInscricao> alunas = fichas.findByTurmaAndStatusOrderByNomeCompletoAsc(turma, StatusInscricao.APROVADA);
+    // Todas as linhas são do mesmo núcleo, então o nome é resolvido uma vez só.
+    String nomeNucleo = nomeDoNucleo(turma);
     List<Map<String, Object>> linhas = new ArrayList<>();
     for (FichaInscricao f : alunas) {
       // Cada chamada perdida vale meia aula; as duas do mesmo dia somam uma falta completa.
@@ -291,9 +291,8 @@ public class RelatorioController {
       todos.put("telefone", f.getTelefone()); todos.put("email", f.getEmail());
       todos.put("endereco", f.getEndereco()); todos.put("bairro", f.getBairro());
       todos.put("cidade", f.getCidade()); todos.put("estado", f.getEstado());
-      todos.put("cep", f.getCep()); todos.put("nucleo", f.getTurma());
-      todos.put("faltas", faltas); todos.put("inicio_projeto", inicio == null ? "" : inicio);
-      todos.put("termino_projeto", termino == null ? "" : termino);
+      todos.put("cep", f.getCep()); todos.put("nucleo", nomeNucleo);
+      todos.put("faltas", faltas);
       if (f.getUserId() != null) {
         confirmacoes.findFirstByUserIdOrderByCreatedDesc(f.getUserId()).ifPresent(conf -> adicionarDadosConfirmacao(todos, conf));
       }
@@ -321,11 +320,37 @@ public class RelatorioController {
     }
   }
 
+  /**
+   * Nome do núcleo para exibição. O que fica gravado na inscrição é o código ({@code
+   * ATL_NTICA_VILLE_VIT_RIA}), que não deve aparecer no relatório. Núcleo não cadastrado cai no
+   * próprio código, para a linha não ficar sem identificação.
+   */
+  private String nomeDoNucleo(String codigo) {
+    if (codigo == null || codigo.isBlank()) return "";
+    return nucleos.findByCodigo(codigo).map(n -> n.getNome()).orElse(codigo);
+  }
+
   private String valorFormatado(Object valor) {
     if (valor == null) return "";
     if (valor instanceof Boolean b) return b ? "Sim" : "Não";
-    if (valor instanceof List<?> lista) return String.join(", ", lista.stream().map(String::valueOf).toList());
-    return String.valueOf(valor);
+    if (valor instanceof List<?> lista)
+      return String.join(", ", lista.stream().map(this::itemFormatado).toList());
+    return itemFormatado(valor);
+  }
+
+  /**
+   * Campos de múltipla escolha com quantidade gravam {@code {item, quantidade}}; fichas anteriores
+   * à criação desse tipo de campo gravam apenas o texto da opção. Sem tratar o primeiro formato, a
+   * planilha recebia a representação interna do objeto, como {@code {item=Bicicleta, quantidade=1}}.
+   *
+   * <p>Sai apenas o nome da opção, para que a coluna tenha um formato único. Mostrar a quantidade
+   * deixaria as fichas antigas, em que ela nunca foi perguntada, aparentando uma informação que a
+   * aluna não prestou.
+   */
+  private String itemFormatado(Object item) {
+    if (!(item instanceof Map<?, ?> mapa)) return String.valueOf(item);
+    Object nome = mapa.get("item");
+    return nome == null ? String.valueOf(item) : String.valueOf(nome);
   }
 
   /** Exportação Excel dos atendimentos filtrados. Confidenciais saem mascarados na planilha. */

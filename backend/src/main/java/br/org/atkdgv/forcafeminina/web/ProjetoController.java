@@ -13,6 +13,7 @@ import br.org.atkdgv.forcafeminina.repo.ProjetoRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
 import br.org.atkdgv.forcafeminina.service.CicloService;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -294,7 +295,12 @@ public class ProjetoController {
   }
 
   private String gerarCodigo(String nome) {
-    String base = nome.trim().toUpperCase().replaceAll("[^A-Z0-9]+", "_").replaceAll("(^_|_$)", "");
+    String base =
+        Normalizer.normalize(nome.trim(), Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toUpperCase(java.util.Locale.ROOT)
+            .replaceAll("[^A-Z0-9]+", "_")
+            .replaceAll("(^_|_$)", "");
     if (base.length() < 2) base = "PROJETO";
     if (base.length() > 32) base = base.substring(0, 32);
     String codigo = base;

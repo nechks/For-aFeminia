@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import Logo from '@/components/Logo'
 import { Link } from 'react-router-dom'
-import { submitCadastroProfessor, CadastroProfessorError } from '@/services/cadastro-professor'
+import {
+  submitCadastroProfessor,
+  submitCadastroPelaGestao,
+  CadastroProfessorError,
+  TIPOS_PROFISSIONAL,
+} from '@/services/cadastro-professor'
 import {
   nacionalidadeOptions,
   estadoCivilOptions,
@@ -32,6 +37,7 @@ import { toast } from '@/components/ui/use-toast'
 
 // Campos de texto/seleção do formulário (documentos são tratados à parte).
 const camposTexto = [
+  'perfil',
   'nome_completo',
   'telefone',
   'cpf',
@@ -101,6 +107,7 @@ const montarEndereco = (form: FormState, tipo: 'residencial' | 'comercial') => {
 }
 
 const estadoInicial: FormState = {
+  perfil: '',
   nome_completo: '',
   telefone: '',
   cpf: '',
@@ -157,7 +164,12 @@ const documentosOpcionais: { key: DocKey; label: string }[] = [
   { key: 'contrato_social', label: 'Contrato social da empresa' },
 ]
 
-export default function CadastroProfessor() {
+/**
+ * Ficha de cadastro de profissional da equipe. `publico` é o autocadastro (vira solicitação para a
+ * Gestão aprovar); `gestao` é a aba interna, em que a conta já nasce criada.
+ */
+export default function CadastroProfessor({ modo = 'publico' }: { modo?: 'publico' | 'gestao' }) {
+  const pelaGestao = modo === 'gestao'
   const [form, setForm] = useState<FormState>(estadoInicial)
   const [arquivos, setArquivos] = useState<Partial<Record<DocKey, File>>>({})
   const [erros, setErros] = useState<Record<string, string>>({})
@@ -249,6 +261,7 @@ export default function CadastroProfessor() {
   const validar = (): boolean => {
     const novos: Record<string, string> = {}
     const obrigatorios: CampoTexto[] = [
+      'perfil',
       'nome_completo',
       'telefone',
       'cpf',
@@ -312,8 +325,6 @@ export default function CadastroProfessor() {
       novos.conta = 'Informe uma conta válida, incluindo o dígito'
     if (form.chave_pix && !chavePixValida(form.chave_pix))
       novos.chave_pix = 'Use CPF/CNPJ, e-mail, telefone com +55 ou chave aleatória válida'
-    if (form.profissao && !/^\d{4}-\d{2} - .+/.test(form.profissao))
-      novos.profissao = 'Selecione uma profissão na lista oficial da CBO'
     if (form.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email))
       novos.email = 'E-mail inválido'
     if (form.senha && form.senha.length < 8)
@@ -354,9 +365,24 @@ export default function CadastroProfessor() {
       if (file) fd.append(key, file)
     })
     try {
-      await submitCadastroProfessor(fd)
-      setEnviado(true)
-      toast({ title: 'Cadastro enviado!' })
+      if (pelaGestao) {
+        await submitCadastroPelaGestao(fd)
+        const tipo = TIPOS_PROFISSIONAL.find(([v]) => v === form.perfil)?.[1] ?? 'Profissional'
+        toast({
+          title: 'Profissional cadastrado!',
+          description: `${form.nome_completo.trim()} já pode entrar no sistema como ${tipo}.`,
+        })
+        // Formulário limpo para o próximo cadastro.
+        setForm(estadoInicial)
+        setArquivos({})
+        setMesmoEndereco(false)
+        setErros({})
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else {
+        await submitCadastroProfessor(fd)
+        setEnviado(true)
+        toast({ title: 'Cadastro enviado!' })
+      }
     } catch (err) {
       if (err instanceof CadastroProfessorError && err.fields) {
         setErros(err.fields)
@@ -400,7 +426,14 @@ export default function CadastroProfessor() {
     erros[campo] ? <p className="text-sm text-destructive">{erros[campo]}</p> : null
 
   return (
-    <div className="min-h-screen bg-muted/30 flex flex-col items-center py-10 px-4">
+    <div
+      className={
+        pelaGestao
+          ? 'flex flex-col items-center'
+          : 'min-h-screen bg-muted/30 flex flex-col items-center py-10 px-4'
+      }
+    >
+      {!pelaGestao && (
       <div className="w-full max-w-2xl mb-8 flex items-center justify-between">
         <Link
           to="/"
@@ -415,16 +448,36 @@ export default function CadastroProfessor() {
         </div>
         <div className="w-16" />
       </div>
+      )}
 
       <form onSubmit={handleSubmit} className="w-full max-w-2xl space-y-6">
         <Card variant="plano" className="border-none shadow-elevation">
           <CardHeader>
-            <CardTitle className="text-2xl">Cadastro da Equipe</CardTitle>
+            <CardTitle className="text-2xl">
+              {pelaGestao ? 'Cadastro de profissional' : 'Cadastro da Equipe'}
+            </CardTitle>
             <CardDescription>
-              Preencha a ficha para se cadastrar como membro da equipe. O acesso é liberado após a
-              aprovação da Gestão, que também define o seu núcleo.
+              {pelaGestao
+                ? 'Cadastre um profissional da equipe. A conta já nasce aprovada, com o e-mail e a senha informados abaixo.'
+                : 'Preencha a ficha para se cadastrar como membro da equipe. O acesso é liberado após a aprovação da Gestão.'}
             </CardDescription>
           </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="tipo-profissional">Tipo de profissional *</Label>
+            <Select value={form.perfil} onValueChange={(v) => set('perfil', v)}>
+              <SelectTrigger id="tipo-profissional" className="h-11">
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                {TIPOS_PROFISSIONAL.map(([valor, rotulo]) => (
+                  <SelectItem key={valor} value={valor}>
+                    {rotulo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {erroMsg('perfil')}
+          </CardContent>
         </Card>
 
         {/* Dados pessoais */}

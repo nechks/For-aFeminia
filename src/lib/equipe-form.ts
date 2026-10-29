@@ -98,6 +98,7 @@ export const documentoLabels: Record<string, string> = {
 
 // Rótulos legíveis dos campos de texto/seleção (usado na tela de solicitações).
 export const campoLabels: Record<string, string> = {
+  perfil: 'Tipo de profissional',
   nome_completo: 'Nome completo',
   telefone: 'Telefone',
   cpf: 'CPF',

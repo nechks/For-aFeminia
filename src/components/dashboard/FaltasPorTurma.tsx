@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { PieChart, Pie, Cell } from 'recharts'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,11 +24,16 @@ const FATIAS = [
 ] as const
 
 function PizzaTurma({ turma, onClick }: { turma: IndicadorTurma; onClick: () => void }) {
-  const dados = FATIAS.map((f) => ({
-    name: f.rotulo,
-    value: turma[f.chave],
-    fill: f.cor,
-  })).filter((d) => d.value > 0)
+  // Memorizado pela turma: um array novo a cada render fazia a pizza redesenhar com animação.
+  const dados = useMemo(
+    () =>
+      FATIAS.map((f) => ({
+        name: f.rotulo,
+        value: turma[f.chave],
+        fill: f.cor,
+      })).filter((d) => d.value > 0),
+    [turma],
+  )
 
   const total = turma.presencas + turma.faltas_justificadas + turma.faltas_sem_justificativa
   const faltas = turma.faltas_justificadas + turma.faltas_sem_justificativa

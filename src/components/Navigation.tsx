@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import Logo from '@/components/Logo'
 import { useApp } from '@/store/app-context'
+import { formatarPerfil } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -9,6 +10,9 @@ import {
   UserCheck,
   Calendar,
   Users,
+  UsersRound,
+  PieChart,
+  UserPlus,
   LogOut,
   Bell,
   FileText,
@@ -21,10 +25,10 @@ import {
   Building2,
   FolderKanban,
   Camera,
-  MessageSquareText,
   History,
   CalendarCheck,
   MapPin,
+  Award,
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useState } from 'react'
@@ -66,6 +70,13 @@ const navItems: NavItem[] = [
     href: '/admin/usuarios',
     icon: UserCog,
     roles: ['ADMINISTRATIVO', 'GESTAO_GERAL'],
+  },
+  {
+    // Cadastro completo de professor, assistente social ou administrativo, já aprovado.
+    title: 'Cadastro de profissional',
+    href: '/gestao/cadastro-profissional',
+    icon: UserPlus,
+    roles: ['GESTAO_GERAL'],
   },
   {
     title: 'Indicadores',
@@ -114,6 +125,7 @@ const navItems: NavItem[] = [
   { title: 'Ficha de Confirmação', href: '/aluna/ficha', icon: FileText, roles: ['ALUNA_FF'] },
   { title: 'Calendário', href: '/aluna/calendario', icon: Calendar, roles: ['ALUNA_FF'] },
   { title: 'Chamada', href: '/professor/chamada', icon: UserCheck, roles: ['PROFESSOR'] },
+  { title: 'Autoavaliações', href: '/professor/avaliacoes', icon: Award, roles: ['PROFESSOR'] },
   {
     title: 'Evidências',
     href: '/profissional/evidencias',
@@ -121,9 +133,17 @@ const navItems: NavItem[] = [
     roles: ['PROFESSOR', 'ASSISTENTE_SOCIAL'],
   },
   {
-    title: 'Feedback',
-    href: '/profissional/feedback',
-    icon: MessageSquareText,
+    // Gestão e Administrativo já veem estes gráficos em "Indicadores".
+    title: 'Socioeconômico',
+    href: '/assistente/socioeconomico',
+    icon: PieChart,
+    roles: ['ASSISTENTE_SOCIAL'],
+  },
+  {
+    // Alunas das turmas em que a pessoa atua; some do menu de quem não tem vínculo com turma.
+    title: 'Alunas',
+    href: '/profissional/alunas',
+    icon: UsersRound,
     roles: ['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL'],
   },
   {
@@ -178,16 +198,19 @@ function filtrarItensEquipe(
   items: NavItem[],
   perfil: string,
   podeAlgumaChamada: boolean,
+  podeAvaliar: boolean,
   possuiVinculoProfissional: boolean,
 ): NavItem[] {
   let filtrados = items
   if (perfil !== 'ALUNA_FF' && !podeAlgumaChamada) {
     filtrados = filtrados.filter((item) => item.href !== '/professor/chamada')
   }
+  if (perfil !== 'ALUNA_FF' && !podeAvaliar) {
+    filtrados = filtrados.filter((item) => item.href !== '/professor/avaliacoes')
+  }
   if (!possuiVinculoProfissional) {
     filtrados = filtrados.filter(
-      (item) =>
-        item.href !== '/profissional/evidencias' && item.href !== '/profissional/feedback',
+      (item) => item.href !== '/profissional/evidencias' && item.href !== '/profissional/alunas',
     )
   }
   return filtrados
@@ -208,14 +231,15 @@ export function Sidebar() {
     ),
     user.perfil,
     turmas.some((t) => (t.chamadas_permitidas ?? []).length > 0),
+    turmas.some((t) => t.tipo_profissional === 'PROFESSORA_DEFESA_PESSOAL'),
     Boolean(user.tipo_profissional || turmas.length),
   )
 
   return (
-    <div className="hidden md:flex w-64 flex-col bg-card border-r min-h-screen z-10 shadow-sm">
-      <div className="h-16 flex items-center px-6 border-b border-border/50">
+    <div className="hidden md:flex w-64 flex-col bg-menu text-white min-h-screen z-10 shadow-lg">
+      <div className="h-16 flex items-center px-6 border-b border-white/10">
         <Logo className="mr-2 h-9 w-9" />
-        <span className="font-bold text-lg text-primary tracking-tight">ATKDGV</span>
+        <span className="font-bold text-lg tracking-tight">ATKDGV</span>
       </div>
       <ScrollArea className="flex-1 py-6 px-3">
         <div className="space-y-1.5">
@@ -225,8 +249,9 @@ export function Sidebar() {
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
                   location.pathname.startsWith(item.href)
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? // Ativo: pílula branca com a marca laranja à esquerda.
+                      'border-l-4 border-laranja bg-white pl-2 font-semibold text-primary shadow-md shadow-black/20'
+                    : 'text-white/75 hover:bg-white/10 hover:text-white',
                 )}
               >
                 <item.icon className="w-4 h-4" />
@@ -236,9 +261,9 @@ export function Sidebar() {
           ))}
         </div>
       </ScrollArea>
-      <div className="p-4 border-t border-border/50">
+      <div className="p-4 border-t border-white/10">
         <div className="flex items-center gap-3 mb-4 px-2">
-          <Avatar className="h-9 w-9 border">
+          <Avatar className="h-9 w-9 border-2 border-white/30">
             {user.avatar && <AvatarImage src={fileUrl(user.avatar)} alt="Foto de perfil" />}
             <AvatarFallback className="bg-primary/10 text-primary">
               {(user.nomeSocial || user.name || '?').charAt(0)}
@@ -248,12 +273,12 @@ export function Sidebar() {
             <span className="text-sm font-medium truncate">
               {user.nomeSocial || user.name || 'Usuária'}
             </span>
-            <span className="text-xs text-muted-foreground truncate">{user.perfil ?? '—'}</span>
+            <span className="text-xs text-white/70 truncate">{formatarPerfil(user.perfil)}</span>
           </div>
         </div>
         <Button
           variant="outline"
-          className="w-full justify-start text-muted-foreground"
+          className="w-full justify-start border-white/25 bg-white/5 text-white/85 hover:bg-white/15 hover:text-white"
           onClick={logout}
         >
           <LogOut className="w-4 h-4 mr-2" />
@@ -279,11 +304,12 @@ export function TopHeader() {
     ),
     user.perfil,
     turmas.some((t) => (t.chamadas_permitidas ?? []).length > 0),
+    turmas.some((t) => t.tipo_profissional === 'PROFESSORA_DEFESA_PESSOAL'),
     Boolean(user.tipo_profissional || turmas.length),
   )
 
   return (
-    <header className="h-16 flex items-center justify-between px-4 md:px-6 bg-card border-b sticky top-0 z-20 shadow-sm">
+    <header className="h-16 flex items-center justify-between px-4 md:px-6 bg-card/85 backdrop-blur border-b sticky top-0 z-20 shadow-sm">
       {/* Faixa com as cores da camisa do projeto: roxo, rosa e laranja. */}
       <div className="absolute inset-x-0 top-0 h-1 bg-marca" aria-hidden />
       <div className="flex items-center md:hidden">
@@ -293,10 +319,10 @@ export function TopHeader() {
               <Menu className="w-5 h-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-72 p-0 flex flex-col">
-            <div className="h-16 flex items-center px-6 border-b border-border/50">
+          <SheetContent side="left" className="w-72 p-0 flex flex-col border-white/10 bg-menu text-white">
+            <div className="h-16 flex items-center px-6 border-b border-white/10">
               <Logo className="mr-2 h-9 w-9" />
-              <span className="font-bold text-lg text-primary">ATKDGV</span>
+              <span className="font-bold text-lg">ATKDGV</span>
             </div>
             <div className="flex-1 py-4 px-3 space-y-1">
               {filteredItems.map((item) => (
@@ -305,8 +331,8 @@ export function TopHeader() {
                     className={cn(
                       'flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium',
                       location.pathname.startsWith(item.href)
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground',
+                        ? 'border-l-4 border-laranja bg-white pl-2 font-semibold text-primary'
+                        : 'text-white/75',
                     )}
                   >
                     <item.icon className="w-4 h-4" />
@@ -315,9 +341,9 @@ export function TopHeader() {
                 </Link>
               ))}
             </div>
-            <div className="p-4 border-t border-border/50">
+            <div className="p-4 border-t border-white/10">
               <div className="flex items-center gap-3 mb-4 px-2">
-                <Avatar className="h-9 w-9 border">
+                <Avatar className="h-9 w-9 border-2 border-white/30">
                   {user.avatar && <AvatarImage src={fileUrl(user.avatar)} alt="Foto de perfil" />}
                   <AvatarFallback className="bg-primary/10 text-primary">
                     {(user.nomeSocial || user.name || '?').charAt(0)}
@@ -327,14 +353,14 @@ export function TopHeader() {
                   <span className="text-sm font-medium truncate">
                     {user.nomeSocial || user.name || 'Usuária'}
                   </span>
-                  <span className="text-xs text-muted-foreground truncate">
-                    {user.perfil ?? '—'}
+                  <span className="text-xs text-white/70 truncate">
+                    {formatarPerfil(user.perfil)}
                   </span>
                 </div>
               </div>
               <Button
                 variant="outline"
-                className="w-full justify-start text-muted-foreground"
+                className="w-full justify-start border-white/25 bg-white/5 text-white/85 hover:bg-white/15 hover:text-white"
                 onClick={() => {
                   setOpen(false)
                   logout()

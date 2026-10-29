@@ -12,6 +12,8 @@ import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.DocumentoAnexoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaConfirmacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.FichaInscricaoRepository;
+import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
+import br.org.atkdgv.forcafeminina.repo.ProjetoRepository;
 import br.org.atkdgv.forcafeminina.service.CicloService;
 import br.org.atkdgv.forcafeminina.service.FileStorageService;
 import br.org.atkdgv.forcafeminina.service.NotificacaoService;
@@ -62,6 +64,8 @@ public class ConfirmacaoController {
   private final ObjectMapper objectMapper;
   private final CicloService ciclos;
   private final NotificacaoService notificacoes;
+  private final NucleoRepository nucleos;
+  private final ProjetoRepository projetos;
 
   public ConfirmacaoController(
       FichaConfirmacaoRepository confirmacoes,
@@ -70,7 +74,9 @@ public class ConfirmacaoController {
       FileStorageService files,
       ObjectMapper objectMapper,
       CicloService ciclos,
-      NotificacaoService notificacoes) {
+      NotificacaoService notificacoes,
+      NucleoRepository nucleos,
+      ProjetoRepository projetos) {
     this.confirmacoes = confirmacoes;
     this.inscricoes = inscricoes;
     this.documentos = documentos;
@@ -78,6 +84,8 @@ public class ConfirmacaoController {
     this.objectMapper = objectMapper;
     this.ciclos = ciclos;
     this.notificacoes = notificacoes;
+    this.nucleos = nucleos;
+    this.projetos = projetos;
   }
 
   @PostMapping(value = "/confirmacao", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -131,7 +139,8 @@ public class ConfirmacaoController {
     }
 
     String secao3 = validarDadosProfissionais(params.get("secao_3_dados"));
-    validarDadosCriancas(params.get("secao_6_socioeconomico"));
+    validarDadosCriancas(
+        params.get("secao_6_socioeconomico"), projetoTemEspacoKids(inscricao));
 
     if (fotoRg == null || fotoRg.isEmpty()) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "bad_request", "Foto do RG é obrigatória.");
@@ -316,7 +325,17 @@ public class ConfirmacaoController {
     return value;
   }
 
-  private void validarDadosCriancas(String secaoSocioeconomica) {
+  private boolean projetoTemEspacoKids(FichaInscricao inscricao) {
+    if (inscricao.getTurma() == null || inscricao.getTurma().isBlank()) return false;
+    return nucleos
+        .findByCodigo(inscricao.getTurma())
+        .map(br.org.atkdgv.forcafeminina.domain.Nucleo::getProjetoId)
+        .flatMap(projetos::findById)
+        .map(br.org.atkdgv.forcafeminina.domain.Projeto::isEspacoKids)
+        .orElse(false);
+  }
+
+  private void validarDadosCriancas(String secaoSocioeconomica, boolean espacoKidsDisponivel) {
     try {
       JsonNode dados = objectMapper.readTree(secaoSocioeconomica);
       String temFilhos = dados.path("tem_filhos").asText("");
@@ -325,6 +344,10 @@ public class ConfirmacaoController {
             HttpStatus.BAD_REQUEST, "filhos_obrigatorio", "Informe se você tem filhos.");
       }
       if (!"Sim".equals(temFilhos)) return;
+
+      // Rede de apoio, necessidade de levar os filhos e cadastro das crianças só fazem parte da
+      // ficha quando o projeto realmente disponibiliza Espaço Kids.
+      if (!espacoKidsDisponivel) return;
 
       String temRedeApoio = dados.path("tem_rede_apoio_filhos").asText("");
       if (!"Sim".equals(temRedeApoio) && !"Não".equals(temRedeApoio)) {

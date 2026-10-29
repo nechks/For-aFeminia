@@ -7,7 +7,7 @@ import br.org.atkdgv.forcafeminina.domain.Usuario;
 import br.org.atkdgv.forcafeminina.repo.NucleoRepository;
 import br.org.atkdgv.forcafeminina.repo.SolicitacaoRepository;
 import br.org.atkdgv.forcafeminina.repo.UsuarioRepository;
-import com.fasterxml.jackson.databind.JsonNode;
+import br.org.atkdgv.forcafeminina.service.ContaProfissionalService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +35,7 @@ public class SolicitacaoController {
   private final UsuarioRepository usuarios;
   private final PasswordEncoder passwordEncoder;
   private final ObjectMapper objectMapper;
+  private final ContaProfissionalService contas;
 
 
   public SolicitacaoController(
@@ -42,12 +43,14 @@ public class SolicitacaoController {
       NucleoRepository nucleos,
       UsuarioRepository usuarios,
       PasswordEncoder passwordEncoder,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ContaProfissionalService contas) {
     this.solicitacoes = solicitacoes;
     this.nucleos = nucleos;
     this.usuarios = usuarios;
     this.passwordEncoder = passwordEncoder;
     this.objectMapper = objectMapper;
+    this.contas = contas;
   }
 
   public record CriacaoAlunaRequest(String name, String email, String password, String nucleo) {}
@@ -144,45 +147,16 @@ public class SolicitacaoController {
     }
 
     if (TIPO_CRIACAO_ALUNA.equals(s.getTipo())) {
-      criarConta(s, Perfil.ALUNA_FF, s.getNucleo());
+      contas.criarConta(s, Perfil.ALUNA_FF, s.getNucleo());
     } else if (TIPO_CADASTRO_PROFESSOR.equals(s.getTipo())) {
-      criarConta(s, Perfil.PROFESSOR, null);
+      // A conta nasce com o tipo escolhido no cadastro (professor, assistente social ou
+      // administrativo), e não mais sempre como professor.
+      contas.criarConta(s, contas.perfilDoCadastro(s), null);
     }
 
     s.setStatus("APROVADA");
     s.setAnalisadoPor(atual.getId());
     return solicitacoes.save(s);
-  }
-
-  /**
-   * Cria a conta de usuário a partir dos dados da solicitação. A senha já vem hasheada em
-   * senhaHash — nunca guardamos a senha em texto. Para a aluna o campo do nome é "name"; para o
-   * professor é "nome_completo" (respostas do formulário de equipe).
-   */
-  private void criarConta(Solicitacao s, Perfil perfil, String turma) {
-    try {
-      JsonNode dados = objectMapper.readTree(s.getDados());
-      String nome =
-          dados.has("name") ? dados.get("name").asText() : dados.get("nome_completo").asText();
-      String email = dados.get("email").asText();
-      if (usuarios.existsByEmailIgnoreCase(email)) {
-        throw new ApiException(
-            HttpStatus.CONFLICT, "email_duplicate", "E-mail já cadastrado no sistema.");
-      }
-      Usuario nova = new Usuario();
-      nova.setName(nome);
-      nova.setEmail(email);
-      nova.setPasswordHash(s.getSenhaHash());
-      nova.setPerfil(perfil);
-      if (turma != null && !turma.isBlank()) nova.setTurma(turma);
-      nova.setAtivo(true);
-      usuarios.save(nova);
-    } catch (ApiException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new ApiException(
-          HttpStatus.INTERNAL_SERVER_ERROR, "internal_error", "Erro ao criar a conta.");
-    }
   }
 
   public record RecusarRequest(String observacao) {}

@@ -131,6 +131,7 @@ export const formSections: FormSection[] = [
         label: 'E-mail',
         type: 'text',
         required: true,
+        prefillKey: 'email',
         placeholder: 'exemplo@email.com',
       },
       {
@@ -145,6 +146,7 @@ export const formSections: FormSection[] = [
         label: 'Naturalidade',
         type: 'text',
         required: true,
+        prefillKey: 'naturalidade',
         placeholder: 'Cidade/UF',
       },
     ],
@@ -183,7 +185,7 @@ export const formSections: FormSection[] = [
       },
       {
         name: 'profissao',
-        label: 'Profissão (CBO)',
+        label: 'Profissão',
         type: 'profession',
         required: true,
         hideWhen: { field: 'situacao_trabalho', equals: 'Desempregada' },
@@ -252,7 +254,12 @@ export const formSections: FormSection[] = [
         type: 'radio',
         options: ['Sim', 'Não'],
       },
-      { name: 'quais_medicacoes', label: 'Quais medicamentos?', type: 'text' },
+      {
+        name: 'quais_medicacoes',
+        label: 'Quais medicamentos?',
+        type: 'text',
+        showWhen: { field: 'medicacao_continua', equals: 'Sim' },
+      },
       { name: 'alergias', label: 'Possui alergias?', type: 'textarea' },
       {
         name: 'cirurgias_recentes',
@@ -359,8 +366,16 @@ export const formSections: FormSection[] = [
       {
         name: 'programas_sociais',
         label: 'Participa de programas sociais?',
-        type: 'textarea',
-        placeholder: 'Bolsa Família, Minha Casa Minha Vida...',
+        type: 'multi-select-add',
+        options: [
+          'Bolsa Família',
+          'Auxílio Gás',
+          'Benefício de Prestação Continuada (BPC)',
+          'Minha Casa Minha Vida',
+          'Tarifa Social de Energia Elétrica',
+        ],
+        placeholder: 'Descreva outro programa social',
+        hint: 'Marque todas as opções aplicáveis. Se não estiver na lista, adicione outro programa.',
       },
       {
         name: 'tem_filhos',
@@ -457,9 +472,10 @@ export const formSections: FormSection[] = [
       },
       {
         name: 'termos_imagem',
-        label: 'Autorizo o uso de minha imagem para fins institucionais e divulgação do projeto.',
+        // Autorizar o uso da imagem é escolha da aluna: não marcar não impede a matrícula.
+        label:
+          'Autorizo o uso de minha imagem para fins institucionais e divulgação do projeto (opcional).',
         type: 'checkbox',
-        required: true,
       },
       {
         name: 'aceite_lgpd',

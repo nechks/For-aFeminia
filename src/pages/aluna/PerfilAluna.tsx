@@ -121,7 +121,15 @@ function PerfilComTurmas() {
   const { turmas, loading } = useMinhasTurmas()
   const isProfissional = Boolean(user?.tipo_profissional || turmas.length)
 
-  if (loading || (!turmas.length && !isProfissional)) return <DadosDaConta />
+  // Espera saber se há turmas antes de escolher o layout. Mostrar o formulário da conta e depois
+  // trocá-lo pelas abas recriava o formulário na frente da pessoa (e apagava o que ela digitava).
+  if (loading)
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  if (!turmas.length && !isProfissional) return <DadosDaConta />
 
   return (
     <Tabs defaultValue="conta" className="space-y-6">
@@ -252,8 +260,9 @@ function DadosDaConta() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <Card>
+    <div className="space-y-6">
+      <div className="mx-auto max-w-lg space-y-6">
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <User className="w-5 h-5" />
@@ -331,9 +340,10 @@ function DadosDaConta() {
             {saving ? 'Salvando...' : 'Salvar alterações'}
           </Button>
         </CardContent>
-      </Card>
+        </Card>
 
-      <AlterarSenhaCard />
+        <AlterarSenhaCard />
+      </div>
     </div>
   )
 }

@@ -20,8 +20,11 @@ import PerfilAluna from './pages/aluna/PerfilAluna'
 import FichaConfirmacao from './pages/aluna/FichaConfirmacao'
 import Calendario from './pages/aluna/Calendario'
 import Chamada from './pages/professor/Chamada'
+import Avaliacoes from './pages/professor/Avaliacoes'
 import Atendimentos from './pages/professor/Atendimentos'
 import RegistroAulaPage from './pages/profissional/RegistroAulaPage'
+import AlunasPage from './pages/profissional/AlunasPage'
+import PerfilSocioeconomico from './pages/assistente/PerfilSocioeconomico'
 import Alertas from './pages/assistente/Alertas'
 import Eventos from './pages/eventos/Eventos'
 import Solicitacoes from './pages/solicitacoes/Solicitacoes'
@@ -34,8 +37,8 @@ import MunicipiosAtendidos from './pages/gestao/MunicipiosAtendidos'
 import HistoricoProfissionais from './pages/gestao/HistoricoProfissionais'
 import Evidencias from './pages/gestao/Evidencias'
 import { useEffect, useState } from 'react'
-import { getNucleos } from '@/services/nucleos'
-import { turmaLabels } from '@/lib/constants'
+import { getNucleosPublicos } from '@/services/nucleos'
+import { turmaLabels, nucleosCadastrados, NUCLEOS_PADRAO } from '@/lib/constants'
 
 const ProtectedRoute = ({
   children,
@@ -222,6 +225,14 @@ const AppRoutes = () => (
         }
       />
       <Route
+        path="/professor/avaliacoes"
+        element={
+          <ProtectedRoute allowedRoles={['PROFESSOR']}>
+            <Avaliacoes />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/atendimentos"
         element={
           <ProtectedRoute
@@ -242,12 +253,28 @@ const AppRoutes = () => (
         }
       />
       <Route
-        path="/profissional/feedback"
+        path="/gestao/cadastro-profissional"
+        element={
+          <ProtectedRoute allowedRoles={['GESTAO_GERAL']}>
+            <CadastroProfessor modo="gestao" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/assistente/socioeconomico"
+        element={
+          <ProtectedRoute allowedRoles={['ASSISTENTE_SOCIAL', 'ADMINISTRATIVO', 'GESTAO_GERAL']}>
+            <PerfilSocioeconomico />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/profissional/alunas"
         element={
           <ProtectedRoute
             allowedRoles={['PROFESSOR', 'ADMINISTRATIVO', 'ASSISTENTE_SOCIAL', 'GESTAO_GERAL']}
           >
-            <RegistroAulaPage tipo="FEEDBACK" />
+            <AlunasPage />
           </ProtectedRoute>
         }
       />
@@ -294,13 +321,23 @@ const AppRoutes = () => (
 function NucleosBootstrap() {
   const [, setVersion] = useState(0)
   useEffect(() => {
-    getNucleos()
+    // Os rótulos são públicos e necessários antes e depois do login. Usar o endpoint
+    // administrativo aqui gerava 403 no perfil da aluna durante o preenchimento da ficha.
+    getNucleosPublicos()
       .then((ns) => {
         if (!Array.isArray(ns)) return
+        // Os nomes padrão permanecem como base: quando nenhum núcleo está cadastrado, apagá-los
+        // fazia a tela exibir o código técnico (ex.: `AEST_SERRA`) nas inscrições antigas.
         Object.keys(turmaLabels).forEach((codigo) => delete turmaLabels[codigo])
-        ns.filter((n) => n.ativo).forEach((n) => {
+        Object.assign(turmaLabels, NUCLEOS_PADRAO)
+        // O endpoint público já devolve somente núcleos ativos e, por privacidade, não
+        // expõe o campo `ativo`. Filtrar essa propriedade inexistente esvaziava todos os rótulos.
+        ns.forEach((n) => {
           turmaLabels[n.codigo] = n.nome
         })
+        // Lista para os seletores: só o que existe de fato no backend.
+        nucleosCadastrados.length = 0
+        nucleosCadastrados.push(...ns.map((n) => ({ codigo: n.codigo, nome: n.nome })))
         setVersion((v) => v + 1)
       })
       .catch((err) => {

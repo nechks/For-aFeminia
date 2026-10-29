@@ -30,17 +30,18 @@ export default function Alunos() {
   const [alunas, setAlunas] = useState<FichaInscricaoFF[]>([])
   const [loading, setLoading] = useState(false)
 
-  const loadData = useCallback(async () => {
+  // `silencioso` é a atualização automática: não mostra "carregando" nem apaga a lista se falhar.
+  const loadData = useCallback(async (silencioso = false) => {
     if (!turma) return
-    setLoading(true)
+    if (!silencioso) setLoading(true)
     try {
       const data = await getAlunasByTurma(turma)
       setAlunas(data)
     } catch (err) {
       console.error('Failed to load alunas:', err)
-      setAlunas([])
+      if (!silencioso) setAlunas([])
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }, [turma])
 
@@ -49,7 +50,7 @@ export default function Alunos() {
   }, [loadData])
 
   useRealtime('ficha_inscricao_ff', () => {
-    loadData()
+    loadData(true)
   })
 
   return (

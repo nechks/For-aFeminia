@@ -39,7 +39,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
         ref={ref}
         className={cn(
           variant === 'secao'
-            ? 'flex flex-col space-y-1 border-b bg-muted/40 px-5 py-3'
+            ? 'flex flex-col space-y-1 border-b bg-[hsl(var(--faixa-card))] px-5 py-3'
             : 'flex flex-col space-y-1.5 p-6',
           className,
         )}

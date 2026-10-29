@@ -86,6 +86,26 @@ public class DashboardController {
 
     String turma = inscricao.getTurma() == null ? "" : inscricao.getTurma();
     long totalAulas = calendario.countByTurma(turma);
+
+    // A data da aula inaugural é definida na inscrição, não na tabela do calendário. As duas
+    // fontes precisam viajar juntas para o painel e para a página Calendário mostrarem o que a
+    // gestão realmente salvou.
+    Turma turmaConcreta =
+        inscricao.getTurmaId() == null ? null : turmas.findById(inscricao.getTurmaId()).orElse(null);
+    br.org.atkdgv.forcafeminina.domain.Nucleo nucleo =
+        turmaConcreta != null
+            ? nucleos.findById(turmaConcreta.getNucleoId()).orElse(null)
+            : nucleos.findByCodigo(turma).orElse(null);
+    String horarioInicio =
+        turmaConcreta != null ? turmaConcreta.getHorarioInicio() : nucleo == null ? null : nucleo.getHorarioInicio();
+    String horarioFim =
+        turmaConcreta != null ? turmaConcreta.getHorarioFim() : nucleo == null ? null : nucleo.getHorarioFim();
+    String localAula =
+        nucleo == null
+            ? null
+            : java.util.stream.Stream.of(nucleo.getEndereco(), nucleo.getBairro(), nucleo.getCidade())
+                .filter(v -> v != null && !v.isBlank())
+                .collect(java.util.stream.Collectors.joining(", "));
     // Cada chamada vale meia aula: presença na Defesa Pessoal e na Roda de Conversa do mesmo dia
     // completa uma aula. Só uma das duas conta 0,5.
     double aulasAssistidas = presencas.countByUserIdAndPresenteTrue(atual.getId()) * 0.5;
@@ -97,7 +117,19 @@ public class DashboardController {
     if (avisos.size() > 5) avisos = avisos.subList(0, 5);
 
     body.put("turma", turma);
-    body.put("totalAulas", totalAulas);
+    body.put("dataPrimeiraAula", inscricao.getDataPrimeiraAula());
+    body.put("horarioInicio", horarioInicio);
+    body.put("horarioFim", horarioFim);
+    body.put("localAula", localAula);
+    body.put(
+        "totalAulas",
+        totalAulas
+            + (inscricao.getDataPrimeiraAula() != null
+                    && !inscricao.getDataPrimeiraAula().isBlank()
+                    && calendario.findByTurmaOrderByDataAulaAsc(turma).stream()
+                        .noneMatch(a -> inscricao.getDataPrimeiraAula().equals(a.getDataAula()))
+                ? 1
+                : 0));
     body.put("aulasAssistidas", aulasAssistidas);
     body.put("percentualFrequencia", percentual);
     body.put("avisos", avisos);
@@ -191,24 +223,6 @@ public class DashboardController {
       }
     }
 
-    Map<String, Integer> rendaDist = new HashMap<>();
-    Map<String, Integer> moradiaDist = new HashMap<>();
-    for (FichaConfirmacao conf : confirmacoes.findAll()) {
-      String secao6 = conf.getSecao6Socioeconomico();
-      if (secao6 == null || secao6.isBlank()) continue;
-      try {
-        JsonNode node = objectMapper.readTree(secao6);
-        JsonNode renda = node.get("renda_familiar");
-        if (renda != null && renda.isTextual()) rendaDist.merge(renda.asText(), 1, Integer::sum);
-        JsonNode moradia = node.get("tipo_moradia");
-        if (moradia != null && moradia.isTextual()) {
-          moradiaDist.merge(moradia.asText(), 1, Integer::sum);
-        }
-      } catch (Exception ignored) {
-        // seção com JSON inválido não entra na distribuição
-      }
-    }
-
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("totalStudents", aprovadas);
     body.put("totalInscricoes", totalInscricoes);
@@ -218,9 +232,55 @@ public class DashboardController {
     body.put("canceladas", canceladas);
     body.put("statusDistribution", statusDist);
     body.put("turmaDistribution", turmaDist);
-    body.put(
-        "socioeconomicDistribution",
-        Map.of("rendaFamiliar", rendaDist, "tipoMoradia", moradiaDist));
+    body.put("socioeconomicDistribution", distribuicaoSocioeconomica());
     return body;
+  }
+
+  /**
+   * Só os gráficos do perfil socioeconômico, para a Assistente Social. São contagens agregadas,
+   * sem nome de aluna; o restante dos indicadores segue restrito à Gestão e ao Administrativo.
+   */
+  @GetMapping("/indicadores/socioeconomico")
+  public Map<String, Object> socioeconomico() {
+    CurrentUser.require(Perfil.GESTAO_GERAL, Perfil.ADMINISTRATIVO, Perfil.ASSISTENTE_SOCIAL);
+    return distribuicaoSocioeconomica();
+  }
+
+  /**
+   * Faixa de renda per capita e tipo de moradia das fichas de confirmação. A faixa de renda é
+   * respondida em "Dados profissionais" (seção 3); o tipo de moradia, no perfil socioeconômico
+   * (seção 6). Ler a renda na seção 6 deixava o gráfico sempre vazio.
+   */
+  private Map<String, Object> distribuicaoSocioeconomica() {
+    Map<String, Integer> rendaDist = new HashMap<>();
+    Map<String, Integer> moradiaDist = new HashMap<>();
+    for (FichaConfirmacao conf : confirmacoes.findAll()) {
+      JsonNode secao3 = lerJson(conf.getSecao3Dados());
+      JsonNode secao6 = lerJson(conf.getSecao6Socioeconomico());
+      // A seção 6 fica como reserva, caso alguma ficha antiga tenha gravado a renda lá.
+      String renda = textoDe(secao3, "renda_familiar");
+      if (renda == null) renda = textoDe(secao6, "renda_familiar");
+      if (renda != null) rendaDist.merge(renda, 1, Integer::sum);
+      String moradia = textoDe(secao6, "tipo_moradia");
+      if (moradia != null) moradiaDist.merge(moradia, 1, Integer::sum);
+    }
+    return Map.of("rendaFamiliar", rendaDist, "tipoMoradia", moradiaDist);
+  }
+
+  /** JSON de uma seção da ficha; seção vazia ou inválida não entra na distribuição. */
+  private JsonNode lerJson(String json) {
+    if (json == null || json.isBlank()) return null;
+    try {
+      return objectMapper.readTree(json);
+    } catch (Exception e) {
+      return null;
+    }
+  }
+
+  private static String textoDe(JsonNode no, String campo) {
+    if (no == null) return null;
+    JsonNode valor = no.get(campo);
+    if (valor == null || !valor.isTextual() || valor.asText().isBlank()) return null;
+    return valor.asText().trim();
   }
 }
