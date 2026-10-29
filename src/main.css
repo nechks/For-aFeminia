@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Paleta da identidade do Força Feminina: roxo, rosa e laranja, tirados da camisa do projeto
+   * (degradê magenta → laranja). Contraste conferido: branco sobre roxo 11.1, branco sobre rosa
+   * 5.6. Branco sobre laranja fica em 2.8 — por isso o laranja leva texto escuro.
+   */
+  :root {
+    --background: 280 30% 98%;
+    --foreground: 280 45% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 280 45% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 280 45% 12%;
+
+    /* Roxo: ações principais, títulos e foco */
+    --primary: 278 62% 30%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Rosa (magenta da camisa) para destaque e para o degradê da marca */
+    --rosa: 338 78% 44%;
+    --rosa-foreground: 0 0% 100%;
+
+    /*
+     * Secondary é a variante discreta dos componentes (badge, botão, trilho de progresso). Fica em
+     * rosa claro: rosa forte ali faria a barra de progresso parecer cheia.
+     */
+    --secondary: 338 80% 95%;
+    --secondary-foreground: 338 75% 32%;
+
+    /* Laranja: destaque. Texto sobre ele é escuro; texto laranja usa --laranja-texto. */
+    --laranja: 26 92% 52%;
+    --laranja-foreground: 280 45% 12%;
+    --laranja-texto: 24 90% 38%;
+
+    /* Accent é o fundo de hover de menus e botões fantasma: pêssego claro puxado do laranja */
+    --accent: 28 100% 94%;
+    --accent-foreground: 22 80% 26%;
+
+    --muted: 280 25% 95%;
+    --muted-foreground: 280 20% 45%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 20% 89%;
+    --input: 280 20% 89%;
+    --ring: 278 62% 30%;
+    --radius: 0.75rem;
+
+    /* Fundo das páginas e faixa dos cards: lavagem suave de rosa e pêssego, puxada da camisa */
+    --fundo-rosa: 336 70% 96%;
+    --fundo-pessego: 28 90% 95%;
+    --faixa-card: 336 75% 97%;
+
+    /* Menu lateral: roxo da marca escurecendo para baixo */
+    --menu-topo: 278 62% 30%;
+    --menu-base: 280 70% 19%;
+  }
+
+  .dark {
+    --background: 280 40% 9%;
+    --foreground: 280 20% 96%;
+    --card: 280 35% 13%;
+    --card-foreground: 280 20% 96%;
+    --popover: 280 35% 13%;
+    --popover-foreground: 280 20% 96%;
+    --primary: 278 70% 72%;
+    --primary-foreground: 280 40% 9%;
+    --rosa: 338 80% 62%;
+    --rosa-foreground: 280 40% 9%;
+    --secondary: 338 40% 22%;
+    --secondary-foreground: 338 80% 85%;
+    --laranja: 26 95% 58%;
+    --laranja-foreground: 280 40% 9%;
+    --laranja-texto: 26 95% 62%;
+    --accent: 280 30% 20%;
+    --accent-foreground: 280 20% 96%;
+    --muted: 280 30% 18%;
+    --muted-foreground: 280 15% 68%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 280 25% 22%;
+    --input: 280 25% 22%;
+    --ring: 278 70% 72%;
+    --fundo-rosa: 320 35% 10%;
+    --fundo-pessego: 285 40% 8%;
+    --faixa-card: 290 30% 16%;
+    --menu-topo: 280 45% 14%;
+    --menu-base: 282 50% 8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  /* Fundo das páginas logadas: rosa no canto de cima, pêssego no de baixo. */
+  .bg-pagina {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(at 0% 0%, hsl(var(--fundo-rosa)) 0, transparent 55%),
+      radial-gradient(at 100% 100%, hsl(var(--fundo-pessego)) 0, transparent 55%);
+    background-attachment: fixed;
+  }
+  .bg-menu {
+    background-image: linear-gradient(180deg, hsl(var(--menu-topo)), hsl(var(--menu-base)));
+  }
+  .bg-marca {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--primary)),
+      hsl(var(--rosa)),
+      hsl(var(--laranja))
+    );
+  }
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+  .animate-slide-up {
+    animation: slide-up 0.4s ease-out forwards;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
